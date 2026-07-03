@@ -1,0 +1,7 @@
+../Core/Src/i2c1_bus.c:13:6:GPIO_Init	1
+../Core/Src/i2c1_bus.c:28:6:I2C1_Init	1
+../Core/Src/i2c1_bus.c:45:16:I2C1_WaitSet	3
+../Core/Src/i2c1_bus.c:58:16:I2C1_WaitClearSR2	3
+../Core/Src/i2c1_bus.c:71:13:I2C1_ClearAddr	1
+../Core/Src/i2c1_bus.c:80:9:I2C1_WriteReg	7
+../Core/Src/i2c1_bus.c:110:9:I2C1_ReadReg	9

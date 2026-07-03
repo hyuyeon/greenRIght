@@ -1,0 +1,3 @@
+../Core/Src/uart_debug.c:14:6:_send_char	4
+../Core/Src/uart_debug.c:26:6:_send_string	2
+../Core/Src/uart_debug.c:34:6:_uart_printf	1
