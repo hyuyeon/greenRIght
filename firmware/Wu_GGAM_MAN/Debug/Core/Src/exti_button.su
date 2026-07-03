@@ -1,0 +1,2 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	16	static,ignoring_inline_asm
+../Core/Src/exti_button.c:3:6:EXTI_Button_Init	8	static

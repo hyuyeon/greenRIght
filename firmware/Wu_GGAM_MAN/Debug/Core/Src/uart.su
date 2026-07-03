@@ -1,0 +1,4 @@
+../Core/Src/uart.c:6:6:UART3_Send_Byte	16	static
+../Core/Src/uart.c:18:6:UART3_Send_String	16	static
+../Core/Src/uart.c:26:6:Uart3_Printf	272	static
+../Core/Src/uart.c:38:6:MX_USART3_UART_Init	8	static

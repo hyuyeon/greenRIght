@@ -1,0 +1,4 @@
+../Core/Src/adxl345.c:21:13:ADXL345_WriteReg	2
+../Core/Src/adxl345.c:33:6:ADXL345_Init	1
+../Core/Src/adxl345.c:39:6:ADXL345_ReadXYZ	1
+../Core/Src/adxl345.c:64:6:RollPitch_Calc	1
