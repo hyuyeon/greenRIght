@@ -7,7 +7,7 @@ COMMON_SRCS = common/vehicle_codec.c
 
 .PHONY: all clean run run-broker
 
-all: $(BIN_DIR)/vehicle_app $(BIN_DIR)/broker_monitor
+all: $(BIN_DIR)/vehicle_app
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -25,5 +25,3 @@ clean:
 run: $(BIN_DIR)/vehicle_app
 	./$(BIN_DIR)/vehicle_app 127.0.0.1 1883
 
-run-broker: $(BIN_DIR)/broker_monitor
-	./$(BIN_DIR)/broker_monitor 127.0.0.1 1883 0

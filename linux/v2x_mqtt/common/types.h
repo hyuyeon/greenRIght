@@ -24,20 +24,31 @@ typedef struct {
 
 } VehicleInfo;
 
-// 자차 정보 구조체 (RTOS로부터 수신)
+// CAN message ID 0000 자차 정보 구조체 (RTOS로부터 수신)
 typedef struct {
     uint16_t x;              // 10 bit (0~1023)
     uint16_t y;              // 11 bit (0~2047)
     uint8_t speed;           // 8 bit
     uint16_t heading;        // 9 bit (0~511)
     uint8_t turn_signal;     // 2bit
+    uint16_t timestamp;      // 12bit
 } EgoVehicle;
+
+// CAN message ID 0010 (주변 인지 정보: 차종/보행자/신호등 경고)
+typedef struct {
+    uint8_t vehicle_type_mask; // 8 bit, 주변 차량 종류 마스크
+    uint8_t pedestrian_info;   // 2 bit, 보행자 정보
+    uint8_t tl_warning;        // 2 bit, 신호등 경고
+    uint16_t timestamp;        // 12 bit, CAN 헤더의 timestamp
+} PerceptionInfo;
 
 typedef struct {
     uint8_t type_mask;       // 신호등 종류 (8bit)
     uint8_t color;           // 색상 (2bit)
     uint8_t time_left;       // 남은 시간 (4bit)
 } TrafficLight;
+
+
 
 // MSB 프로토콜 변환용 64비트 프레임 (가독성을 위한 공용체/구조체 조합)
 typedef union {
