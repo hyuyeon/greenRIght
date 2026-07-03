@@ -1,6 +1,0 @@
-../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
-../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	2
-../Core/Src/speed_sensor.c:26:6:SpeedSensor_Init	1
-../Core/Src/speed_sensor.c:50:13:Sensor_Sample_1ms	7
-../Core/Src/speed_sensor.c:84:7:Speed_GetMps	1
-../Core/Src/speed_sensor.c:89:6:TIM3_IRQHandler	4

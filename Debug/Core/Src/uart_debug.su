@@ -1,3 +1,0 @@
-../Core/Src/uart_debug.c:14:6:_send_char	16	static
-../Core/Src/uart_debug.c:26:6:_send_string	16	static
-../Core/Src/uart_debug.c:34:6:_uart_printf	272	static

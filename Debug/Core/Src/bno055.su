@@ -1,7 +1,0 @@
-../Core/Src/bno055.c:27:16:BNO055_Write8	16	static
-../Core/Src/bno055.c:32:16:BNO055_Read8	16	static
-../Core/Src/bno055.c:37:9:BNO055_ReadHeading	16	static
-../Core/Src/bno055.c:63:9:IMU_GetHeadingX100	4	static
-../Core/Src/bno055.c:68:9:IMU_IsValid	4	static
-../Core/Src/bno055.c:73:9:ApplyHeadingDeadband_X100	16	static
-../Core/Src/bno055.c:96:9:BNO055_Init	16	static
