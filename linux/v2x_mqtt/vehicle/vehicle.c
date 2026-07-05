@@ -14,6 +14,11 @@ static uint8_t g_vehicle_id = VEHICLE_ID_NONE;
 
 static volatile bool g_running = true;
 
+/* CAN TX(msg 0100/0101/0110) 대상 필터링 값.
+ * 0 = 정보 없음(VEHICLE_ID_NONE). 추후 실제 필터링 로직(거리/CZ 기준 등)이 이 값을 갱신하게 됨. */
+static uint8_t filtered_vehicle = 2; //VEHICLE_ID_NONE
+static uint8_t filtered_trafficLight = 0;
+
 /* ----------------------------------------------------------------------- */
 
 static void sleep_ms(int ms)
@@ -107,6 +112,21 @@ int main(int argc, char** argv)
         }
 
         VehicleInfo v = ego_to_vehicle_info(&ego, g_vehicle_id, cz_x, cz_y, linked_tl);
+        
+        #ifdef TEST_DIRECTION_OVERRIDE
+        {
+            FILE* f = fopen("/tmp/v2x_test_direction", "r");
+            if (f) {
+                int forced;
+                if (fscanf(f, "%d", &forced) == 1) {
+                    v.direction = (uint8_t)(forced & 0x03);
+                    printf("[TEST] direction 강제 오버라이드: %u\n", v.direction);
+                }
+                fclose(f);
+            }
+        }
+        #endif
+
 
         mqtt_publish_vehicle_info(&v);
 
@@ -120,6 +140,19 @@ int main(int argc, char** argv)
 
         PerceptionInfo perception;
         bool perception_valid = can_handler_get_perception(&perception);
+
+        /* ---- CAN TX: 필터링된 타차(msg 0100/0101) + 연동 신호등(msg 0110) ---- */
+        VehicleInfo filtered_v;
+        bool filtered_v_valid = (filtered_vehicle != VEHICLE_ID_NONE)
+            && mqtt_get_other_vehicle(filtered_vehicle, &filtered_v);
+
+        can_tx_update_filtered_vehicle(v.direction, filtered_vehicle,
+            filtered_v_valid ? &filtered_v : NULL);
+
+        TrafficLight filtered_tl;
+        if (mqtt_get_traffic_light(filtered_trafficLight, &filtered_tl)) {
+            can_tx_send_traffic_light(&filtered_tl, v.cz_x, v.cz_y);
+        }
 
         printf("[TX] id=%u x=%u y=%u speed=%u heading=%u turn=%u | 주변 차량 %d대",
             v.vehicle_id, v.x, v.y, v.speed, v.heading, ego.turn_signal, others_n);

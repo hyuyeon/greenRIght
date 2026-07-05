@@ -267,3 +267,10 @@ bool can_handler_get_perception(PerceptionInfo* out)
 
     return valid;
 }
+
+/* can_tx.c가 RX와 동일한 소켓으로 write()할 수 있도록 fd를 그대로 넘겨준다.
+ * 초기화 전(g_can_sock == -1)이면 -1이 반환된다. */
+int can_handler_get_socket(void)
+{
+    return g_can_sock;
+}
