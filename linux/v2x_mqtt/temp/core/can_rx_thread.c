@@ -62,7 +62,17 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
 
     self_vehicle_manager_update_from_can(&context->self, &context->map, ego);
 
-    /* TODO: if current != next, enqueue a turn-state transition event for CAN TX timing control. */
+    bool was_candidate_mode =
+        current == TEMP_TURN_STATE_RIGHT_TURN ||
+        current == TEMP_TURN_STATE_UNPROTECTED_LEFT;
+    bool is_candidate_mode =
+        next == TEMP_TURN_STATE_RIGHT_TURN ||
+        next == TEMP_TURN_STATE_UNPROTECTED_LEFT;
+
+    if (was_candidate_mode != is_candidate_mode) {
+        atomic_store(&context->candidate_vehicle_tx_enabled, is_candidate_mode);
+        printf("[can_rx_thread] candidate vehicle tx %s\n", is_candidate_mode ? "enabled" : "disabled");
+    }
 }
 
 static void* can_rx_thread_main(void* arg)

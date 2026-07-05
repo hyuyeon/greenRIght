@@ -13,6 +13,7 @@
 
 typedef struct {
     atomic_bool running;
+    atomic_bool candidate_vehicle_tx_enabled;
     char mqtt_host[128];
     int mqtt_port;
     uint8_t vehicle_id;

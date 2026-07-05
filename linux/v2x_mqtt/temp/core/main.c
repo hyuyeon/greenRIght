@@ -7,6 +7,7 @@
 
 #include "app_context.h"
 #include "can_rx_thread.h"
+#include "can_tx_thread.h"
 #include "mqtt_thread.h"
 
 #define DEFAULT_MAP_PATH "map/intersection_lanelet_v1.xml"
@@ -33,6 +34,7 @@ static bool app_init(AppContext* app, int argc, char** argv)
 
     memset(app, 0, sizeof(*app));
     atomic_init(&app->running, true);
+    atomic_init(&app->candidate_vehicle_tx_enabled, false);
 
     if (!map_service_init(&app->map, map_path)) return false;
     if (!self_vehicle_manager_init(&app->self, vehicle_id)) return false;
@@ -66,6 +68,7 @@ int main(int argc, char** argv)
     }
 
     pthread_t can_rx_thread;
+    pthread_t can_tx_thread;
     pthread_t mqtt_thread;
 
     if (can_rx_thread_start(&can_rx_thread, &g_app) != 0) {
@@ -78,7 +81,13 @@ int main(int argc, char** argv)
         atomic_store(&g_app.running, false);
     }
 
+    if (can_tx_thread_start(&can_tx_thread, &g_app) != 0) {
+        fprintf(stderr, "[main] can tx thread start failed\n");
+        atomic_store(&g_app.running, false);
+    }
+
     pthread_join(can_rx_thread, NULL);
+    pthread_join(can_tx_thread, NULL);
     pthread_join(mqtt_thread, NULL);
 
     app_cleanup(&g_app);

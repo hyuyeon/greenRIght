@@ -56,6 +56,20 @@ int other_vehicle_manager_count(OtherVehicleManager* manager)
     return count;
 }
 
+int other_vehicle_manager_copy_valid(OtherVehicleManager* manager, VehicleInfo* out, int max_count)
+{
+    if (!manager || !out || max_count <= 0) return 0;
+
+    int count = 0;
+    pthread_mutex_lock(&manager->lock);
+    for (int i = 0; i < TEMP_MAX_OTHER_VEHICLES && count < max_count; i++) {
+        if (!manager->valid[i]) continue;
+        out[count++] = manager->table[i];
+    }
+    pthread_mutex_unlock(&manager->lock);
+    return count;
+}
+
 void other_vehicle_manager_cleanup_stale(OtherVehicleManager* manager, uint64_t timeout_ms)
 {
     if (!manager) return;

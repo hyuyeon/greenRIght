@@ -16,12 +16,17 @@
 #endif
 
 #define CAN_MSG_ID_EGO_STATUS 0x0
+#define CAN_MSG_ID_FILTERED_INTRO   0x4
+#define CAN_MSG_ID_FILTERED_STATUS  0x5
+#define CAN_MSG_ID_TRAFFIC_LIGHT    0x6
 
 #define UPD_BIT_SPEED       (1u << 0)
 #define UPD_BIT_X           (1u << 1)
 #define UPD_BIT_Y           (1u << 2)
 #define UPD_BIT_HEADING     (1u << 3)
 #define UPD_BIT_TURN_SIGNAL (1u << 4)
+
+#define CAN_TX_ARBITRATION_ID 0x321
 
 #ifdef __linux__
 static void emit_ego(CanHandler* handler, const EgoVehicle* ego)
@@ -234,4 +239,100 @@ bool can_handler_poll(CanHandler* handler, int timeout_ms)
     emit_ego(handler, &ego);
     return true;
 #endif
+}
+
+static bool can_handler_send_raw_frame(CanHandler* handler, uint8_t message_id, uint8_t update_mask, uint64_t payload40)
+{
+    if (!handler || !handler->initialized) return false;
+
+    static uint16_t tx_timestamp = 0;
+    tx_timestamp = (uint16_t)((tx_timestamp + 1u) & 0x0FFFu);
+    uint64_t raw = 0;
+    raw |= ((uint64_t)message_id & 0x0Fu) << 60;
+    raw |= ((uint64_t)tx_timestamp & 0x0FFFu) << 48;
+    raw |= ((uint64_t)update_mask & 0xFFu) << 40;
+    raw |= payload40 & 0xFFFFFFFFFFULL;
+
+    if (handler->mock_mode) {
+        return true;
+    }
+
+#ifndef __linux__
+    (void)raw;
+    return false;
+#else
+    struct can_frame frame;
+    memset(&frame, 0, sizeof(frame));
+    frame.can_id = CAN_TX_ARBITRATION_ID;
+    frame.can_dlc = 8;
+    for (int i = 7; i >= 0; i--) {
+        frame.data[i] = (uint8_t)(raw & 0xFFu);
+        raw >>= 8;
+    }
+
+    ssize_t nbytes = write(handler->fd, &frame, sizeof(frame));
+    if (nbytes != (ssize_t)sizeof(frame)) {
+        if (nbytes < 0) perror("[CanHandler] tx write failed");
+        return false;
+    }
+    return true;
+#endif
+}
+
+bool can_handler_send_candidate_vehicle_intro(CanHandler* handler, uint8_t type_mask, uint16_t cz_x, uint16_t cz_y)
+{
+    uint64_t payload = 0;
+    payload |= ((uint64_t)(type_mask & 0xFFu)) << 32;
+    payload |= ((uint64_t)(cz_x & 0x03FFu)) << 22;
+    payload |= ((uint64_t)(cz_y & 0x07FFu)) << 11;
+
+    uint8_t update_mask = 0x07;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_INTRO, update_mask, payload);
+}
+
+bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type_mask, const VehicleInfo* candidate)
+{
+    if (!candidate) {
+        return can_handler_send_no_candidate_vehicle(handler);
+    }
+
+    uint64_t payload = 0;
+    payload |= ((uint64_t)(type_mask & 0xFFu)) << 32;
+    payload |= ((uint64_t)(candidate->speed & 0xFFu)) << 24;
+    payload |= ((uint64_t)(candidate->x & 0x03FFu)) << 14;
+    payload |= ((uint64_t)(candidate->y & 0x07FFu)) << 3;
+
+    uint8_t update_mask = 0x0F;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+}
+
+bool can_handler_send_no_candidate_vehicle(CanHandler* handler)
+{
+    uint8_t update_mask = 0x01;
+    uint64_t payload = 0;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+}
+
+bool can_handler_send_traffic_light(CanHandler* handler, uint8_t tl_type_mask, const TrafficLight* traffic_light, uint16_t cz_x, uint16_t cz_y)
+{
+    if (!traffic_light || tl_type_mask == 0) {
+        return can_handler_send_no_traffic_light(handler);
+    }
+
+    uint64_t payload = 0;
+    payload |= ((uint64_t)(tl_type_mask & 0xFFu)) << 32;
+    payload |= ((uint64_t)(traffic_light->color & 0x03u)) << 30;
+    payload |= ((uint64_t)(traffic_light->time_left & 0x0Fu)) << 26;
+    payload |= ((uint64_t)(cz_x & 0x03FFu)) << 16;
+    payload |= ((uint64_t)(cz_y & 0x07FFu)) << 5;
+
+    uint8_t update_mask = 0x1F;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
+}
+
+bool can_handler_send_no_traffic_light(CanHandler* handler)
+{
+    uint8_t update_mask = 0x01;
+    uint64_t payload = 0;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
 }
