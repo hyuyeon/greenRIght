@@ -28,7 +28,8 @@ static bool app_init(AppContext* app, int argc, char** argv)
     int mqtt_port = argc > 2 ? atoi(argv[2]) : DEFAULT_MQTT_PORT;
     const char* map_path = argc > 3 ? argv[3] : DEFAULT_MAP_PATH;
     uint8_t vehicle_id = argc > 4 ? (uint8_t)atoi(argv[4]) : DEFAULT_VEHICLE_ID;
-    bool can_mock = true;
+    const char* can_mock_env = getenv("CAN_MOCK");
+    bool can_mock = can_mock_env && strcmp(can_mock_env, "1") == 0;
 
     memset(app, 0, sizeof(*app));
     atomic_init(&app->running, true);

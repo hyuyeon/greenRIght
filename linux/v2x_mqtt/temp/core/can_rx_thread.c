@@ -2,8 +2,18 @@
 
 #include <stdatomic.h>
 #include <stdio.h>
+#include <time.h>
 
 #define CAN_POLL_TIMEOUT_MS 100
+#define CAN_RECONNECT_DELAY_MS 1000
+
+static void sleep_ms(long ms)
+{
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000 * 1000;
+    nanosleep(&ts, NULL);
+}
 
 static TempTurnState decide_turn_state(
     TempTurnState current,
@@ -64,17 +74,20 @@ static void* can_rx_thread_main(void* arg)
         .user_data = context,
     };
 
-    if (!can_handler_init(&context->can, context->can_ifname, context->can_mock, &callbacks)) {
-        fprintf(stderr, "[can_rx_thread] can handler init failed\n");
-        atomic_store(&context->running, false);
-        return NULL;
-    }
-
     while (atomic_load(&context->running)) {
-        can_handler_poll(&context->can, CAN_POLL_TIMEOUT_MS);
+        if (!can_handler_init(&context->can, context->can_ifname, context->can_mock, &callbacks)) {
+            fprintf(stderr, "[can_rx_thread] can handler init failed, retrying in %d ms\n", CAN_RECONNECT_DELAY_MS);
+            sleep_ms(CAN_RECONNECT_DELAY_MS);
+            continue;
+        }
+
+        while (atomic_load(&context->running) && context->can.initialized) {
+            can_handler_poll(&context->can, CAN_POLL_TIMEOUT_MS);
+        }
+
+        can_handler_cleanup(&context->can);
     }
 
-    can_handler_cleanup(&context->can);
     return NULL;
 }
 

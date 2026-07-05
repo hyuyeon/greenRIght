@@ -23,14 +23,7 @@
 #define UPD_BIT_HEADING     (1u << 3)
 #define UPD_BIT_TURN_SIGNAL (1u << 4)
 
-static void sleep_ms(long ms)
-{
-    struct timespec ts;
-    ts.tv_sec = ms / 1000;
-    ts.tv_nsec = (ms % 1000) * 1000 * 1000;
-    nanosleep(&ts, NULL);
-}
-
+#ifdef __linux__
 static void emit_ego(CanHandler* handler, const EgoVehicle* ego)
 {
     if (handler && ego && handler->callbacks.on_ego) {
@@ -38,12 +31,15 @@ static void emit_ego(CanHandler* handler, const EgoVehicle* ego)
     }
 }
 
-#ifdef __linux__
-static bool decode_ego_status(uint16_t timestamp, uint8_t update_mask, uint64_t payload, EgoVehicle* ego)
+static bool decode_ego_status(uint16_t timestamp, uint8_t update_mask, uint64_t payload, const EgoVehicle* previous, bool has_previous, EgoVehicle* ego)
 {
     if (!ego) return false;
 
-    memset(ego, 0, sizeof(*ego));
+    if (has_previous && previous) {
+        *ego = *previous;
+    } else {
+        memset(ego, 0, sizeof(*ego));
+    }
 
     if (update_mask & UPD_BIT_SPEED) {
         ego->speed = (uint8_t)((payload >> 32) & 0xFF);
@@ -65,9 +61,9 @@ static bool decode_ego_status(uint16_t timestamp, uint8_t update_mask, uint64_t 
     return true;
 }
 
-static bool decode_can_payload(const uint8_t* data, uint8_t dlc, EgoVehicle* ego)
+static bool decode_can_payload(CanHandler* handler, const uint8_t* data, uint8_t dlc, EgoVehicle* ego)
 {
-    if (!data || !ego || dlc < 8) return false;
+    if (!handler || !data || !ego || dlc < 8) return false;
 
     uint64_t raw = 0;
     for (int i = 0; i < 8; i++) {
@@ -82,25 +78,45 @@ static bool decode_can_payload(const uint8_t* data, uint8_t dlc, EgoVehicle* ego
     uint16_t timestamp = (uint16_t)((raw >> 48) & 0xFFF);
     uint8_t update_mask = (uint8_t)((raw >> 40) & 0xFF);
     uint64_t payload = raw & 0xFFFFFFFFFFULL;
-    return decode_ego_status(timestamp, update_mask, payload, ego);
+    return decode_ego_status(timestamp, update_mask, payload, &handler->last_ego, handler->has_last_ego, ego);
 }
 
 #endif
+
+static void sleep_ms(long ms)
+{
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000 * 1000;
+    nanosleep(&ts, NULL);
+}
 
 static bool poll_mock(CanHandler* handler)
 {
     sleep_ms(20);
 
     EgoVehicle ego;
-    memset(&ego, 0, sizeof(ego));
+    if (handler->has_last_ego) {
+        ego = handler->last_ego;
+    } else {
+        memset(&ego, 0, sizeof(ego));
+        ego.x = 150;
+        ego.y = 40;
+        ego.speed = 30;
+        ego.heading = 0;
+        ego.turn_signal = 0;
+    }
+
     ego.x = (uint16_t)(150 + (handler->mock_tick % 60));
     ego.y = (uint16_t)(40 + (handler->mock_tick % 80));
-    ego.speed = 30;
-    ego.heading = 0;
-    ego.turn_signal = 0;
     ego.timestamp = handler->mock_tick++;
 
-    emit_ego(handler, &ego);
+    handler->last_ego = ego;
+    handler->has_last_ego = true;
+
+    if (handler->callbacks.on_ego) {
+        handler->callbacks.on_ego(&ego, handler->callbacks.user_data);
+    }
     return true;
 }
 
@@ -127,7 +143,7 @@ bool can_handler_init(
     }
 
 #ifndef __linux__
-    fprintf(stderr, "[CanHandler] real SocketCAN is only available on Linux. Use mock mode on this platform.\n");
+    fprintf(stderr, "[CanHandler] real SocketCAN is only available on Linux.\n");
     return false;
 #else
     struct sockaddr_can addr;
@@ -161,7 +177,7 @@ bool can_handler_init(
     }
 
     handler->initialized = true;
-    printf("[CanHandler] init if=%s mock=0\n", ifr.ifr_name);
+    printf("[CanHandler] init if=%s\n", ifr.ifr_name);
     return true;
 #endif
 }
@@ -212,7 +228,9 @@ bool can_handler_poll(CanHandler* handler, int timeout_ms)
     if (nbytes < (ssize_t)sizeof(struct can_frame)) return false;
 
     EgoVehicle ego;
-    if (!decode_can_payload(frame.data, frame.can_dlc, &ego)) return false;
+    if (!decode_can_payload(handler, frame.data, frame.can_dlc, &ego)) return false;
+    handler->last_ego = ego;
+    handler->has_last_ego = true;
     emit_ego(handler, &ego);
     return true;
 #endif

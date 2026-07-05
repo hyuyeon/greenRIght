@@ -17,6 +17,8 @@ typedef struct {
     int fd;
     bool mock_mode;
     uint16_t mock_tick;
+    EgoVehicle last_ego;
+    bool has_last_ego;
     CanHandlerCallbacks callbacks;
     bool initialized;
 } CanHandler;
