@@ -8,6 +8,7 @@ LDLIBS  = $(shell pkg-config --libs libmosquitto 2>/dev/null || echo -lmosquitto
 
 BIN_DIR = bin
 TARGET  = $(BIN_DIR)/v2x_mqtt_temp
+FAKE_VEHICLE_TARGET = $(BIN_DIR)/fake_vehicle_l15_to_l6
 
 SRCS = \
     core/main.c \
@@ -23,7 +24,7 @@ SRCS = \
     common/vehicle_codec.c \
     map/IntersectionMap.c
 
-.PHONY: all clean
+.PHONY: all clean fake_vehicle_l15_to_l6
 
 all: $(TARGET)
 
@@ -33,5 +34,10 @@ $(BIN_DIR):
 $(TARGET): $(SRCS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
+fake_vehicle_l15_to_l6: $(FAKE_VEHICLE_TARGET)
+
+$(FAKE_VEHICLE_TARGET): tools/fake_vehicle_l15_to_l6.c common/vehicle_codec.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(FAKE_VEHICLE_TARGET)

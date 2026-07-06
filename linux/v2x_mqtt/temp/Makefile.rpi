@@ -15,6 +15,7 @@ PKG_CONFIG ?= pkg-config
 
 BIN_DIR = bin
 TARGET = $(BIN_DIR)/v2x_mqtt_rpi
+FAKE_VEHICLE_TARGET = $(BIN_DIR)/fake_vehicle_l15_to_l6
 
 INCLUDES = -Icommon -Icore -Ihandler -Imanager -Iservice -Imap -Ican
 
@@ -40,7 +41,7 @@ SRCS = \
     common/vehicle_codec.c \
     map/IntersectionMap.c
 
-.PHONY: all clean run deps
+.PHONY: all clean run deps fake_vehicle_l15_to_l6
 
 all: $(TARGET)
 
@@ -48,6 +49,11 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 $(TARGET): $(SRCS) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+fake_vehicle_l15_to_l6: $(FAKE_VEHICLE_TARGET)
+
+$(FAKE_VEHICLE_TARGET): tools/fake_vehicle_l15_to_l6.c common/vehicle_codec.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 run: $(TARGET)
@@ -58,4 +64,4 @@ deps:
 	@echo "sudo apt install -y build-essential pkg-config libcjson-dev libmosquitto-dev can-utils"
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(FAKE_VEHICLE_TARGET)
