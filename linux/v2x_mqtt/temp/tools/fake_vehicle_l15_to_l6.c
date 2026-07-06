@@ -9,17 +9,20 @@
 
 #include <mosquitto.h>
 
+#include "map_service.h"
 #include "mqtt_topics.h"
+#include "self_vehicle_manager.h"
 #include "types.h"
 #include "vehicle_codec.h"
 
 #define DEFAULT_VEHICLE_ID 2
 #define DEFAULT_SPEED 30
 #define DEFAULT_HEADING 90
+#define DEFAULT_MAP_PATH "map/intersection_lanelet_v1.xml"
 #define PUBLISH_PERIOD_MS 50
 #define ROUTE_START_X 30
 #define ROUTE_END_X 270
-#define ROUTE_STEP_X 5
+#define ROUTE_STEP_X 4
 #define ROUTE_Y 177
 #define RESET_PAUSE_MS 500
 
@@ -31,13 +34,6 @@ static void handle_signal(int signo)
     g_running = 0;
 }
 
-static uint64_t monotonic_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
-}
-
 static void sleep_ms(long ms)
 {
     struct timespec ts;
@@ -46,39 +42,14 @@ static void sleep_ms(long ms)
     nanosleep(&ts, NULL);
 }
 
-static void safe_copy(char* dst, size_t dst_size, const char* src)
+static void fill_ego(EgoVehicle* ego, uint16_t x)
 {
-    if (!dst || dst_size == 0) return;
-    snprintf(dst, dst_size, "%s", src ? src : "");
-}
-
-static void fill_fake_vehicle(VehicleInfo* vehicle, uint8_t vehicle_id, uint16_t x)
-{
-    memset(vehicle, 0, sizeof(*vehicle));
-
-    vehicle->vehicle_id = vehicle_id;
-    vehicle->x = x;
-    vehicle->y = ROUTE_Y;
-    vehicle->speed = DEFAULT_SPEED;
-    vehicle->heading = DEFAULT_HEADING;
-    safe_copy(vehicle->turn_state, sizeof(vehicle->turn_state), "straight");
-    vehicle->timestamp_ms = monotonic_ms();
-
-    if (x < 60) {
-        safe_copy(vehicle->lanelet_id, sizeof(vehicle->lanelet_id), "L15");
-        safe_copy(vehicle->linked_tl_id, sizeof(vehicle->linked_tl_id), "TL4");
-    } else if (x < 240) {
-        safe_copy(vehicle->lanelet_id, sizeof(vehicle->lanelet_id), "");
-        safe_copy(vehicle->linked_tl_id, sizeof(vehicle->linked_tl_id), "TL4");
-    } else {
-        safe_copy(vehicle->lanelet_id, sizeof(vehicle->lanelet_id), "L6");
-        safe_copy(vehicle->linked_tl_id, sizeof(vehicle->linked_tl_id), "");
-    }
-
-    if (x <= 230) {
-        safe_copy(vehicle->conflict_zone_ids[0], sizeof(vehicle->conflict_zone_ids[0]), "cz1");
-        vehicle->conflict_zone_count = 1;
-    }
+    memset(ego, 0, sizeof(*ego));
+    ego->x = x;
+    ego->y = ROUTE_Y;
+    ego->speed = DEFAULT_SPEED;
+    ego->heading = DEFAULT_HEADING;
+    ego->turn_signal = TURN_SIGNAL_NONE;
 }
 
 static bool publish_vehicle(struct mosquitto* mqtt, const char* topic, const VehicleInfo* vehicle)
@@ -94,12 +65,13 @@ static bool publish_vehicle(struct mosquitto* mqtt, const char* topic, const Veh
     }
 
     printf(
-        "[fake_vehicle] pub id=%u x=%u y=%u lane=%s cz_count=%u tl=%s\n",
+        "[fake_vehicle] pub id=%u x=%u y=%u lane=%s cz_count=%u cz0=%s tl=%s\n",
         vehicle->vehicle_id,
         vehicle->x,
         vehicle->y,
         vehicle->lanelet_id,
         vehicle->conflict_zone_count,
+        vehicle->conflict_zone_count > 0 ? vehicle->conflict_zone_ids[0] : "",
         vehicle->linked_tl_id
     );
     free(payload);
@@ -109,13 +81,26 @@ static bool publish_vehicle(struct mosquitto* mqtt, const char* topic, const Veh
 int main(int argc, char** argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s <mqtt_host> <mqtt_port> [vehicle_id]\n", argv[0]);
+        fprintf(stderr, "Usage: %s <mqtt_host> <mqtt_port> [vehicle_id] [map_path]\n", argv[0]);
         return 1;
     }
 
     const char* host = argv[1];
     int port = atoi(argv[2]);
     uint8_t vehicle_id = argc > 3 ? (uint8_t)atoi(argv[3]) : DEFAULT_VEHICLE_ID;
+    const char* map_path = argc > 4 ? argv[4] : DEFAULT_MAP_PATH;
+
+    MapService map_service;
+    SelfVehicleManager self_manager;
+    if (!map_service_init(&map_service, map_path)) {
+        fprintf(stderr, "[fake_vehicle] map load failed: %s\n", map_path);
+        return 1;
+    }
+    if (!self_vehicle_manager_init(&self_manager, vehicle_id)) {
+        fprintf(stderr, "[fake_vehicle] self vehicle manager init failed\n");
+        return 1;
+    }
+    self_vehicle_manager_set_turn_state(&self_manager, TURN_STATE_STRAIGHT);
 
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
@@ -128,6 +113,7 @@ int main(int argc, char** argv)
     if (!mqtt) {
         fprintf(stderr, "[fake_vehicle] mosquitto_new failed\n");
         mosquitto_lib_cleanup();
+        self_vehicle_manager_destroy(&self_manager);
         return 1;
     }
 
@@ -136,6 +122,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "[fake_vehicle] connect failed: %s\n", mosquitto_strerror(rc));
         mosquitto_destroy(mqtt);
         mosquitto_lib_cleanup();
+        self_vehicle_manager_destroy(&self_manager);
         return 1;
     }
 
@@ -144,6 +131,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "[fake_vehicle] loop start failed: %s\n", mosquitto_strerror(rc));
         mosquitto_destroy(mqtt);
         mosquitto_lib_cleanup();
+        self_vehicle_manager_destroy(&self_manager);
         return 1;
     }
 
@@ -153,9 +141,13 @@ int main(int argc, char** argv)
 
     uint16_t x = ROUTE_START_X;
     while (g_running) {
+        EgoVehicle ego;
         VehicleInfo vehicle;
-        fill_fake_vehicle(&vehicle, vehicle_id, x);
-        publish_vehicle(mqtt, topic, &vehicle);
+        fill_ego(&ego, x);
+        self_vehicle_manager_update_from_can(&self_manager, &map_service, &ego);
+        if (self_vehicle_manager_get_info(&self_manager, &vehicle)) {
+            publish_vehicle(mqtt, topic, &vehicle);
+        }
 
         sleep_ms(PUBLISH_PERIOD_MS);
 
@@ -171,5 +163,6 @@ int main(int argc, char** argv)
     mosquitto_disconnect(mqtt);
     mosquitto_destroy(mqtt);
     mosquitto_lib_cleanup();
+    self_vehicle_manager_destroy(&self_manager);
     return 0;
 }
