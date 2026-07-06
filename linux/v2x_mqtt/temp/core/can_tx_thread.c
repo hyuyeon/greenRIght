@@ -107,8 +107,8 @@ static bool compute_type_mask(const VehicleInfo* self, const VehicleInfo* other,
 
 static bool select_candidate_vehicle(AppContext* context, const VehicleInfo* self, CandidateSelection* out)
 {
-    VehicleInfo others[TEMP_MAX_OTHER_VEHICLES];
-    int count = other_vehicle_manager_copy_valid(&context->others, others, TEMP_MAX_OTHER_VEHICLES);
+    VehicleInfo others[MAX_OTHER_VEHICLES];
+    int count = other_vehicle_manager_copy_valid(&context->others, others, MAX_OTHER_VEHICLES);
 
     bool found = false;
     uint32_t best_distance = UINT32_MAX;
@@ -194,7 +194,7 @@ static bool select_farthest_self_conflict_zone_center(
 
 static uint8_t select_candidate_traffic_light_id(const VehicleInfo* self, const CandidateSelection* vehicle_selection)
 {
-    if (!self) return TEMP_INVALID_ID;
+    if (!self) return INVALID_ID;
 
     const char* linked_tl_id = self->linked_tl_id;
     if (
@@ -224,7 +224,7 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
     traffic_light_manager_select_candidate(&context->traffic_lights, tl_id);
 
     TrafficLight traffic_light;
-    uint8_t candidate_tl_id = TEMP_INVALID_ID;
+    uint8_t candidate_tl_id = INVALID_ID;
     if (!traffic_light_manager_get_candidate(&context->traffic_lights, &candidate_tl_id, &traffic_light)) {
         can_handler_send_no_traffic_light(&context->can);
         return;

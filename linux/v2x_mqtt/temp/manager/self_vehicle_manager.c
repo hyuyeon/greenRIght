@@ -22,30 +22,30 @@ static uint64_t monotonic_ms(void)
     return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
 }
 
-static const char* turn_state_to_string(TempTurnState state)
+static const char* turn_state_to_string(TurnState state)
 {
     switch (state) {
-        case TEMP_TURN_STATE_RIGHT_TURN:
+        case TURN_STATE_RIGHT_TURN:
             return "right_turn";
-        case TEMP_TURN_STATE_LEFT_TURN:
+        case TURN_STATE_LEFT_TURN:
             return "left_turn";
-        case TEMP_TURN_STATE_UNPROTECTED_LEFT:
+        case TURN_STATE_UNPROTECTED_LEFT:
             return "unprotected_left";
-        case TEMP_TURN_STATE_STRAIGHT:
+        case TURN_STATE_STRAIGHT:
         default:
             return "straight";
     }
 }
 
-static const char* movement_from_turn_state(TempTurnState state)
+static const char* movement_from_turn_state(TurnState state)
 {
     switch (state) {
-        case TEMP_TURN_STATE_RIGHT_TURN:
+        case TURN_STATE_RIGHT_TURN:
             return "right_turn";
-        case TEMP_TURN_STATE_LEFT_TURN:
-        case TEMP_TURN_STATE_UNPROTECTED_LEFT:
+        case TURN_STATE_LEFT_TURN:
+        case TURN_STATE_UNPROTECTED_LEFT:
             return "left_turn";
-        case TEMP_TURN_STATE_STRAIGHT:
+        case TURN_STATE_STRAIGHT:
         default:
             return "straight";
     }
@@ -70,7 +70,7 @@ static void fill_conflict_zones_from_lane(
     VehicleInfo* info,
     const MapService* map_service,
     const char* lanelet_id,
-    TempTurnState turn_state
+    TurnState turn_state
 )
 {
     clear_conflict_zones(info);
@@ -151,7 +151,7 @@ static void update_conflict_zones(
     VehicleInfo* info,
     const MapService* map_service,
     const MapContext* context,
-    TempTurnState turn_state
+    TurnState turn_state
 )
 {
     if (!info || !map_service || !context) return;
@@ -172,7 +172,7 @@ bool self_vehicle_manager_init(SelfVehicleManager* manager, uint8_t vehicle_id)
     manager->vehicle_id = vehicle_id;
     manager->info.vehicle_id = vehicle_id;
     safe_copy(manager->info.turn_state, sizeof(manager->info.turn_state), "straight");
-    manager->turn_state = TEMP_TURN_STATE_STRAIGHT;
+    manager->turn_state = TURN_STATE_STRAIGHT;
     return true;
 }
 
@@ -228,16 +228,16 @@ bool self_vehicle_manager_get_ego(const SelfVehicleManager* manager, EgoVehicle*
     return valid;
 }
 
-TempTurnState self_vehicle_manager_get_turn_state(const SelfVehicleManager* manager)
+TurnState self_vehicle_manager_get_turn_state(const SelfVehicleManager* manager)
 {
-    if (!manager) return TEMP_TURN_STATE_STRAIGHT;
+    if (!manager) return TURN_STATE_STRAIGHT;
     pthread_mutex_lock((pthread_mutex_t*)&manager->lock);
-    TempTurnState state = manager->turn_state;
+    TurnState state = manager->turn_state;
     pthread_mutex_unlock((pthread_mutex_t*)&manager->lock);
     return state;
 }
 
-void self_vehicle_manager_set_turn_state(SelfVehicleManager* manager, TempTurnState state)
+void self_vehicle_manager_set_turn_state(SelfVehicleManager* manager, TurnState state)
 {
     if (!manager) return;
     pthread_mutex_lock(&manager->lock);

@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include "IntersectionMap.h"
-#include "temp_types.h"
+#include "types.h"
 
 typedef struct {
     IntersectionMap map;

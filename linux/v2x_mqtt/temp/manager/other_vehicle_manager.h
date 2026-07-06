@@ -5,13 +5,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "types.h"
-#include "temp_types.h"
 
 typedef struct {
     pthread_mutex_t lock;
-    VehicleInfo table[TEMP_MAX_OTHER_VEHICLES];
-    bool valid[TEMP_MAX_OTHER_VEHICLES];
-    uint64_t last_updated_ms[TEMP_MAX_OTHER_VEHICLES];
+    VehicleInfo table[MAX_OTHER_VEHICLES];
+    bool valid[MAX_OTHER_VEHICLES];
+    uint64_t last_updated_ms[MAX_OTHER_VEHICLES];
     VehicleInfo candidate;
     bool candidate_valid;
 } OtherVehicleManager;

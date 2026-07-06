@@ -6,12 +6,10 @@
 #include <stdint.h>
 #include "types.h"
 
-#define TEMP_MAX_TRAFFIC_LIGHTS 8
-
 typedef struct {
     pthread_mutex_t lock;
-    TrafficLight table[TEMP_MAX_TRAFFIC_LIGHTS];
-    bool valid[TEMP_MAX_TRAFFIC_LIGHTS];
+    TrafficLight table[MAX_TRAFFIC_LIGHTS];
+    bool valid[MAX_TRAFFIC_LIGHTS];
     TrafficLight candidate;
     uint8_t candidate_id;
     bool candidate_valid;

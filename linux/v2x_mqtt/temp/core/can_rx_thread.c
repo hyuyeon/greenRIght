@@ -15,37 +15,37 @@ static void sleep_ms(long ms)
     nanosleep(&ts, NULL);
 }
 
-static TempTurnState decide_turn_state(
-    TempTurnState current,
+static TurnState decide_turn_state(
+    TurnState current,
     const EgoVehicle* ego,
     const MapContext* map_context
 )
 {
     if (!ego || !map_context) return current;
 
-    bool signal_off = (ego->turn_signal == TEMP_TURN_NONE);
-    bool right_signal = (ego->turn_signal == TEMP_TURN_RIGHT);
-    bool left_signal = (ego->turn_signal == TEMP_TURN_LEFT);
+    bool signal_off = (ego->turn_signal == TURN_SIGNAL_NONE);
+    bool right_signal = (ego->turn_signal == TURN_SIGNAL_RIGHT);
+    bool left_signal = (ego->turn_signal == TURN_SIGNAL_LEFT);
 
-    if (current != TEMP_TURN_STATE_STRAIGHT) {
-        return signal_off ? TEMP_TURN_STATE_STRAIGHT : current;
+    if (current != TURN_STATE_STRAIGHT) {
+        return signal_off ? TURN_STATE_STRAIGHT : current;
     }
 
     if (!map_context->found) {
-        return TEMP_TURN_STATE_STRAIGHT;
+        return TURN_STATE_STRAIGHT;
     }
 
-    if (right_signal && map_context->direction == TEMP_DIRECTION_RIGHT) {
-        return TEMP_TURN_STATE_RIGHT_TURN;
+    if (right_signal && map_context->direction == DIRECTION_RIGHT) {
+        return TURN_STATE_RIGHT_TURN;
     }
-    if (left_signal && map_context->direction == TEMP_DIRECTION_LEFT) {
-        return TEMP_TURN_STATE_LEFT_TURN;
+    if (left_signal && map_context->direction == DIRECTION_LEFT) {
+        return TURN_STATE_LEFT_TURN;
     }
-    if (left_signal && map_context->direction == TEMP_DIRECTION_UNPROTECTED_LEFT) {
-        return TEMP_TURN_STATE_UNPROTECTED_LEFT;
+    if (left_signal && map_context->direction == DIRECTION_UNPROTECTED_LEFT) {
+        return TURN_STATE_UNPROTECTED_LEFT;
     }
 
-    return TEMP_TURN_STATE_STRAIGHT;
+    return TURN_STATE_STRAIGHT;
 }
 
 static void on_ego_frame(const EgoVehicle* ego, void* user_data)
@@ -56,18 +56,18 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
     MapContext map_context;
     map_service_query_vehicle_context(&context->map, ego->x, ego->y, &map_context);
 
-    TempTurnState current = self_vehicle_manager_get_turn_state(&context->self);
-    TempTurnState next = decide_turn_state(current, ego, &map_context);
+    TurnState current = self_vehicle_manager_get_turn_state(&context->self);
+    TurnState next = decide_turn_state(current, ego, &map_context);
     self_vehicle_manager_set_turn_state(&context->self, next);
 
     self_vehicle_manager_update_from_can(&context->self, &context->map, ego);
 
     bool was_candidate_mode =
-        current == TEMP_TURN_STATE_RIGHT_TURN ||
-        current == TEMP_TURN_STATE_UNPROTECTED_LEFT;
+        current == TURN_STATE_RIGHT_TURN ||
+        current == TURN_STATE_UNPROTECTED_LEFT;
     bool is_candidate_mode =
-        next == TEMP_TURN_STATE_RIGHT_TURN ||
-        next == TEMP_TURN_STATE_UNPROTECTED_LEFT;
+        next == TURN_STATE_RIGHT_TURN ||
+        next == TURN_STATE_UNPROTECTED_LEFT;
 
     if (was_candidate_mode != is_candidate_mode) {
         atomic_store(&context->candidate_vehicle_tx_enabled, is_candidate_mode);

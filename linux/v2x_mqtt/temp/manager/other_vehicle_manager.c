@@ -26,7 +26,7 @@ void other_vehicle_manager_destroy(OtherVehicleManager* manager)
 
 void other_vehicle_manager_update(OtherVehicleManager* manager, const VehicleInfo* vehicle)
 {
-    if (!manager || !vehicle || vehicle->vehicle_id >= TEMP_MAX_OTHER_VEHICLES) return;
+    if (!manager || !vehicle || vehicle->vehicle_id >= MAX_OTHER_VEHICLES) return;
     pthread_mutex_lock(&manager->lock);
     manager->table[vehicle->vehicle_id] = *vehicle;
     manager->valid[vehicle->vehicle_id] = true;
@@ -36,7 +36,7 @@ void other_vehicle_manager_update(OtherVehicleManager* manager, const VehicleInf
 
 bool other_vehicle_manager_get(OtherVehicleManager* manager, uint8_t vehicle_id, VehicleInfo* out)
 {
-    if (!manager || !out || vehicle_id >= TEMP_MAX_OTHER_VEHICLES) return false;
+    if (!manager || !out || vehicle_id >= MAX_OTHER_VEHICLES) return false;
     pthread_mutex_lock(&manager->lock);
     bool valid = manager->valid[vehicle_id];
     if (valid) *out = manager->table[vehicle_id];
@@ -49,7 +49,7 @@ int other_vehicle_manager_count(OtherVehicleManager* manager)
     if (!manager) return 0;
     int count = 0;
     pthread_mutex_lock(&manager->lock);
-    for (int i = 0; i < TEMP_MAX_OTHER_VEHICLES; i++) {
+    for (int i = 0; i < MAX_OTHER_VEHICLES; i++) {
         if (manager->valid[i]) count++;
     }
     pthread_mutex_unlock(&manager->lock);
@@ -62,7 +62,7 @@ int other_vehicle_manager_copy_valid(OtherVehicleManager* manager, VehicleInfo* 
 
     int count = 0;
     pthread_mutex_lock(&manager->lock);
-    for (int i = 0; i < TEMP_MAX_OTHER_VEHICLES && count < max_count; i++) {
+    for (int i = 0; i < MAX_OTHER_VEHICLES && count < max_count; i++) {
         if (!manager->valid[i]) continue;
         out[count++] = manager->table[i];
     }
@@ -75,7 +75,7 @@ void other_vehicle_manager_cleanup_stale(OtherVehicleManager* manager, uint64_t 
     if (!manager) return;
     uint64_t now = monotonic_ms();
     pthread_mutex_lock(&manager->lock);
-    for (int i = 0; i < TEMP_MAX_OTHER_VEHICLES; i++) {
+    for (int i = 0; i < MAX_OTHER_VEHICLES; i++) {
         if (!manager->valid[i]) continue;
         if (now - manager->last_updated_ms[i] > timeout_ms) {
             manager->valid[i] = false;

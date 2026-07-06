@@ -6,13 +6,12 @@
 #include <stdint.h>
 #include "types.h"
 #include "map_service.h"
-#include "temp_types.h"
 
 typedef struct {
     pthread_mutex_t lock;
     EgoVehicle ego;
     VehicleInfo info;
-    TempTurnState turn_state;
+    TurnState turn_state;
     uint8_t vehicle_id;
     bool valid;
 } SelfVehicleManager;
@@ -26,7 +25,7 @@ void self_vehicle_manager_update_from_can(
 );
 bool self_vehicle_manager_get_info(const SelfVehicleManager* manager, VehicleInfo* out);
 bool self_vehicle_manager_get_ego(const SelfVehicleManager* manager, EgoVehicle* out);
-TempTurnState self_vehicle_manager_get_turn_state(const SelfVehicleManager* manager);
-void self_vehicle_manager_set_turn_state(SelfVehicleManager* manager, TempTurnState state);
+TurnState self_vehicle_manager_get_turn_state(const SelfVehicleManager* manager);
+void self_vehicle_manager_set_turn_state(SelfVehicleManager* manager, TurnState state);
 
 #endif

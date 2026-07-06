@@ -36,14 +36,14 @@ static const MapArea* find_conflict_zone(const MapService* service, const char* 
     return NULL;
 }
 
-static TempDirection parse_direction(const char* maneuver, bool unprotected_left)
+static Direction parse_direction(const char* maneuver, bool unprotected_left)
 {
-    if (!maneuver) return TEMP_DIRECTION_UNKNOWN;
-    if (strcmp(maneuver, "straight_right") == 0) return TEMP_DIRECTION_RIGHT;
+    if (!maneuver) return DIRECTION_UNKNOWN;
+    if (strcmp(maneuver, "straight_right") == 0) return DIRECTION_RIGHT;
     if (strcmp(maneuver, "straight_left") == 0) {
-        return unprotected_left ? TEMP_DIRECTION_UNPROTECTED_LEFT : TEMP_DIRECTION_LEFT;
+        return unprotected_left ? DIRECTION_UNPROTECTED_LEFT : DIRECTION_LEFT;
     }
-    return TEMP_DIRECTION_STRAIGHT;
+    return DIRECTION_STRAIGHT;
 }
 
 bool map_service_init(MapService* service, const char* xml_path)
@@ -154,18 +154,18 @@ bool map_service_get_conflict_zone_center(
 
 uint8_t map_service_parse_lane_num(const char* lanelet_id)
 {
-    if (!lanelet_id || lanelet_id[0] != 'L') return TEMP_INVALID_ID;
+    if (!lanelet_id || lanelet_id[0] != 'L') return INVALID_ID;
     long value = strtol(lanelet_id + 1, NULL, 10);
-    if (value < 0 || value > 255) return TEMP_INVALID_ID;
+    if (value < 0 || value > 255) return INVALID_ID;
     return (uint8_t)value;
 }
 
 uint8_t map_service_parse_traffic_light_num(const char* tl_id)
 {
-    if (!tl_id || tl_id[0] == '\0') return TEMP_INVALID_ID;
+    if (!tl_id || tl_id[0] == '\0') return INVALID_ID;
     if (tl_id[0] == 'T' && tl_id[1] == 'L') {
         long value = strtol(tl_id + 2, NULL, 10);
         if (value >= 0 && value <= 255) return (uint8_t)value;
     }
-    return TEMP_INVALID_ID;
+    return INVALID_ID;
 }
