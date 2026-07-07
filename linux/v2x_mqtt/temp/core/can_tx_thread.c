@@ -251,12 +251,13 @@ static void* can_tx_thread_main(void* arg)
         if (!active) {
             if (last_active) {
                 can_handler_send_no_candidate_vehicle(&context->can);
-                can_handler_send_no_traffic_light(&context->can);
                 other_vehicle_manager_set_candidate(&context->others, NULL);
                 printf("[can_tx_thread] candidate vehicle tx stopped\n");
                 last_active = false;
                 last_intro_vehicle_id = CANDIDATE_ID_NONE;
             }
+
+            send_candidate_traffic_light(context, has_self ? &self : NULL, NULL);
             sleep_ms(CANDIDATE_TX_PERIOD_MS);
             continue;
         }
