@@ -13,6 +13,10 @@
 #define TYPE_MASK_RIGHT_VS_LEFT 2
 #define TYPE_MASK_LEFT_VS_STRAIGHT 4
 #define TYPE_MASK_LEFT_VS_RIGHT 8
+#define MANEUVER_STRAIGHT 0
+#define MANEUVER_RIGHT_TURN 1
+#define MANEUVER_UNPROTECTED_LEFT 2
+#define MANEUVER_LEFT_TURN 3
 
 typedef struct {
     VehicleInfo vehicle;
@@ -72,6 +76,15 @@ static bool is_turn_state(const VehicleInfo* vehicle, const char* state)
 static bool is_protected_left_turn_state(const VehicleInfo* vehicle)
 {
     return is_turn_state(vehicle, "left_turn");
+}
+
+static uint8_t maneuver_code_from_self(const VehicleInfo* self)
+{
+    if (!self) return MANEUVER_STRAIGHT;
+    if (is_turn_state(self, "right_turn")) return MANEUVER_RIGHT_TURN;
+    if (is_turn_state(self, "unprotected_left")) return MANEUVER_UNPROTECTED_LEFT;
+    if (is_turn_state(self, "left_turn")) return MANEUVER_LEFT_TURN;
+    return MANEUVER_STRAIGHT;
 }
 
 static bool compute_type_mask(const VehicleInfo* self, const VehicleInfo* other, uint8_t* out_type_mask)
@@ -211,8 +224,10 @@ static uint8_t select_candidate_traffic_light_id(const VehicleInfo* self, const 
 
 static void send_candidate_traffic_light(AppContext* context, const VehicleInfo* self, const CandidateSelection* vehicle_selection)
 {
+    uint8_t maneuver = maneuver_code_from_self(self);
+
     if (!context || !self) {
-        can_handler_send_no_traffic_light(&context->can);
+        can_handler_send_no_traffic_light(&context->can, maneuver);
         return;
     }
 
@@ -226,11 +241,11 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
     TrafficLight traffic_light;
     uint8_t candidate_tl_id = INVALID_ID;
     if (!traffic_light_manager_get_candidate(&context->traffic_lights, &candidate_tl_id, &traffic_light)) {
-        can_handler_send_no_traffic_light(&context->can);
+        can_handler_send_no_traffic_light(&context->can, maneuver);
         return;
     }
 
-    can_handler_send_traffic_light(&context->can, candidate_tl_id, &traffic_light, cz_x, cz_y);
+    can_handler_send_traffic_light(&context->can, candidate_tl_id, &traffic_light, cz_x, cz_y, maneuver);
 }
 
 static void* can_tx_thread_main(void* arg)

@@ -313,10 +313,17 @@ bool can_handler_send_no_candidate_vehicle(CanHandler* handler)
     return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
 }
 
-bool can_handler_send_traffic_light(CanHandler* handler, uint8_t tl_type_mask, const TrafficLight* traffic_light, uint16_t cz_x, uint16_t cz_y)
+bool can_handler_send_traffic_light(
+    CanHandler* handler,
+    uint8_t tl_type_mask,
+    const TrafficLight* traffic_light,
+    uint16_t cz_x,
+    uint16_t cz_y,
+    uint8_t maneuver
+)
 {
     if (!traffic_light || tl_type_mask == 0) {
-        return can_handler_send_no_traffic_light(handler);
+        return can_handler_send_no_traffic_light(handler, maneuver);
     }
 
     uint64_t payload = 0;
@@ -325,14 +332,17 @@ bool can_handler_send_traffic_light(CanHandler* handler, uint8_t tl_type_mask, c
     payload |= ((uint64_t)(traffic_light->time_left & 0x0Fu)) << 26;
     payload |= ((uint64_t)(cz_x & 0x03FFu)) << 16;
     payload |= ((uint64_t)(cz_y & 0x07FFu)) << 5;
+    payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
-    uint8_t update_mask = 0x1F;
+    uint8_t update_mask = 0x3F;
     return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
 }
 
-bool can_handler_send_no_traffic_light(CanHandler* handler)
+bool can_handler_send_no_traffic_light(CanHandler* handler, uint8_t maneuver)
 {
-    uint8_t update_mask = 0x01;
     uint64_t payload = 0;
+    payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
+
+    uint8_t update_mask = 0x21;
     return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
 }
