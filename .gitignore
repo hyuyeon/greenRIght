@@ -1,2 +1,14 @@
 # AI 데이터셋
 data/
+# STM32/CubeIDE용 무시 목록
+Debug/
+Release/
+*.elf
+*.map
+*.list
+*.o
+*.d
+*.su
+*.cyclo
+*.launch
+.settings/
