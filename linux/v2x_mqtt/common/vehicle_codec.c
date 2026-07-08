@@ -5,8 +5,32 @@
 
 /* ============================ VehicleInfo ============================ */
 
-/* VehicleInfo 구조체를 cJSON 객체로 변환한다.
- * 반환된 객체의 소유권은 호출자에게 있으며, 사용 후 cJSON_Delete()가 필요하다. */
+static void safe_copy(char* dst, size_t dst_size, const char* src)
+{
+    if (!dst || dst_size == 0) return;
+    if (!src) {
+        dst[0] = '\0';
+        return;
+    }
+    snprintf(dst, dst_size, "%s", src);
+}
+
+static bool get_uint_field(const cJSON *root, const char *key, unsigned long long *out)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (!cJSON_IsNumber(item)) return false;
+    *out = (unsigned long long)item->valuedouble;
+    return true;
+}
+
+static bool get_string_field(const cJSON *root, const char *key, char *out, size_t out_size)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (!cJSON_IsString(item) || !item->valuestring) return false;
+    safe_copy(out, out_size, item->valuestring);
+    return true;
+}
+
 cJSON *vehicle_info_to_json(const VehicleInfo *v)
 {
     if (!v) return NULL;
@@ -14,18 +38,31 @@ cJSON *vehicle_info_to_json(const VehicleInfo *v)
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
 
-    /* MQTT payload에서 필드명을 그대로 볼 수 있도록 구조체 멤버를 JSON key로 매핑한다. */
     cJSON_AddNumberToObject(root, "vehicle_id", v->vehicle_id);
     cJSON_AddNumberToObject(root, "x", v->x);
     cJSON_AddNumberToObject(root, "y", v->y);
     cJSON_AddNumberToObject(root, "speed", v->speed);
     cJSON_AddNumberToObject(root, "heading", v->heading);
-    cJSON_AddNumberToObject(root, "lane", v->lane);
-    cJSON_AddNumberToObject(root, "direction", v->direction);
-    cJSON_AddNumberToObject(root, "cz_x", v->cz_x);
-    cJSON_AddNumberToObject(root, "cz_y", v->cz_y);
-    cJSON_AddNumberToObject(root, "linked_tl", v->linked_tl);
-    cJSON_AddNumberToObject(root, "timestamp", v->timestamp);
+    cJSON_AddStringToObject(root, "lanelet_id", v->lanelet_id);
+    cJSON_AddStringToObject(root, "turn_state", v->turn_state);
+
+    cJSON *cz_array = cJSON_CreateArray();
+    if (!cz_array) {
+        cJSON_Delete(root);
+        return NULL;
+    }
+
+    uint8_t cz_count = v->conflict_zone_count;
+    if (cz_count > VEHICLE_INFO_MAX_CONFLICT_ZONES) {
+        cz_count = VEHICLE_INFO_MAX_CONFLICT_ZONES;
+    }
+    for (uint8_t i = 0; i < cz_count; i++) {
+        cJSON_AddItemToArray(cz_array, cJSON_CreateString(v->conflict_zone_ids[i]));
+    }
+    cJSON_AddItemToObject(root, "conflict_zone_ids", cz_array);
+    cJSON_AddNumberToObject(root, "conflict_zone_count", cz_count);
+    cJSON_AddStringToObject(root, "linked_tl_id", v->linked_tl_id);
+    cJSON_AddNumberToObject(root, "timestamp_ms", (double)v->timestamp_ms);
 
     return root;
 }
@@ -39,19 +76,11 @@ char *vehicle_info_to_json_string(const VehicleInfo *v)
     return str;
 }
 
-/* 공용 헬퍼: 정수 필드를 안전하게 읽는다 (없으면 false) */
-static bool get_uint_field(const cJSON *root, const char *key, unsigned long *out)
-{
-    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
-    if (!cJSON_IsNumber(item)) return false;
-    *out = (unsigned long)item->valuedouble;
-    return true;
-}
-
 bool vehicle_info_from_json(const cJSON *root, VehicleInfo *out)
 {
     if (!root || !out) return false;
-    unsigned long val;
+    unsigned long long val;
+    memset(out, 0, sizeof(*out));
 
     if (!get_uint_field(root, "vehicle_id", &val)) return false;
     out->vehicle_id = (uint8_t)val;
@@ -68,23 +97,26 @@ bool vehicle_info_from_json(const cJSON *root, VehicleInfo *out)
     if (!get_uint_field(root, "heading", &val)) return false;
     out->heading = (uint16_t)val;
 
-    if (!get_uint_field(root, "lane", &val)) return false;
-    out->lane = (uint8_t)val;
+    if (!get_string_field(root, "lanelet_id", out->lanelet_id, sizeof(out->lanelet_id))) return false;
+    if (!get_string_field(root, "turn_state", out->turn_state, sizeof(out->turn_state))) return false;
 
-    if (!get_uint_field(root, "direction", &val)) return false;
-    out->direction = (uint8_t)val;
+    const cJSON *cz_array = cJSON_GetObjectItemCaseSensitive(root, "conflict_zone_ids");
+    if (!cJSON_IsArray(cz_array)) return false;
 
-    if (!get_uint_field(root, "cz_x", &val)) return false;
-    out->cz_x = (uint16_t)val;
+    uint8_t count = 0;
+    const cJSON *item = NULL;
+    cJSON_ArrayForEach(item, cz_array) {
+        if (count >= VEHICLE_INFO_MAX_CONFLICT_ZONES) break;
+        if (!cJSON_IsString(item) || !item->valuestring) return false;
+        safe_copy(out->conflict_zone_ids[count], sizeof(out->conflict_zone_ids[count]), item->valuestring);
+        count++;
+    }
+    out->conflict_zone_count = count;
 
-    if (!get_uint_field(root, "cz_y", &val)) return false;
-    out->cz_y = (uint16_t)val;
+    if (!get_string_field(root, "linked_tl_id", out->linked_tl_id, sizeof(out->linked_tl_id))) return false;
 
-    if (!get_uint_field(root, "linked_tl", &val)) return false;
-    out->linked_tl = (uint8_t)val;
-
-    if (!get_uint_field(root, "timestamp", &val)) return false;
-    out->timestamp = (uint16_t)val;
+    if (!get_uint_field(root, "timestamp_ms", &val)) return false;
+    out->timestamp_ms = (uint64_t)val;
 
     return true;
 }
@@ -145,14 +177,45 @@ int vehicle_info_array_from_json_string(const char *json_str, VehicleInfo *out, 
 
 /* ============================ TrafficLight ============================ */
 
+static const char* traffic_light_color_to_string(uint8_t color)
+{
+    switch (color) {
+        case TRAFFIC_LIGHT_COLOR_RED:
+            return "red";
+        case TRAFFIC_LIGHT_COLOR_YELLOW:
+            return "yellow";
+        case TRAFFIC_LIGHT_COLOR_GREEN:
+            return "green";
+        default:
+            return "unknown";
+    }
+}
+
+static bool traffic_light_color_from_string(const char* color, uint8_t* out)
+{
+    if (!color || !out) return false;
+    if (strcmp(color, "red") == 0) {
+        *out = TRAFFIC_LIGHT_COLOR_RED;
+        return true;
+    }
+    if (strcmp(color, "yellow") == 0) {
+        *out = TRAFFIC_LIGHT_COLOR_YELLOW;
+        return true;
+    }
+    if (strcmp(color, "green") == 0) {
+        *out = TRAFFIC_LIGHT_COLOR_GREEN;
+        return true;
+    }
+    return false;
+}
+
 cJSON *traffic_light_to_json(const TrafficLight *tl)
 {
     if (!tl) return NULL;
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
 
-    cJSON_AddNumberToObject(root, "type_mask", tl->type_mask);
-    cJSON_AddNumberToObject(root, "color", tl->color);
+    cJSON_AddStringToObject(root, "color", traffic_light_color_to_string(tl->color));
     cJSON_AddNumberToObject(root, "time_left", tl->time_left);
 
     return root;
@@ -170,13 +233,11 @@ char *traffic_light_to_json_string(const TrafficLight *tl)
 bool traffic_light_from_json(const cJSON *root, TrafficLight *out)
 {
     if (!root || !out) return false;
-    unsigned long val;
+    unsigned long long val;
+    char color[16] = {0};
 
-    if (!get_uint_field(root, "type_mask", &val)) return false;
-    out->type_mask = (uint8_t)val;
-
-    if (!get_uint_field(root, "color", &val)) return false;
-    out->color = (uint8_t)val;
+    if (!get_string_field(root, "color", color, sizeof(color))) return false;
+    if (!traffic_light_color_from_string(color, &out->color)) return false;
 
     if (!get_uint_field(root, "time_left", &val)) return false;
     out->time_left = (uint8_t)val;

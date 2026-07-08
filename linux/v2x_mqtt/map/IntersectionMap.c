@@ -300,6 +300,52 @@ static void lanelet_set_traffic_light(MapLanelet* lane, const char* traffic_ligh
     safe_copy(lane->traffic_light_id, sizeof(lane->traffic_light_id), traffic_light_id);
 }
 
+static MapConflictRelation* map_add_conflict_relation(
+    IntersectionMap* map,
+    const char* relation_id,
+    const char* conflict_zone_id
+)
+{
+    if (!map || !relation_id || !conflict_zone_id || conflict_zone_id[0] == '\0') {
+        return NULL;
+    }
+
+    if (map->conflict_relation_count >= MAP_MAX_CONFLICT_RELATIONS) {
+        fprintf(stderr,
+                "[IntersectionMap] conflict relation capacity exceeded for %s\n",
+                relation_id);
+        return NULL;
+    }
+
+    MapConflictRelation* relation = &map->conflict_relations[map->conflict_relation_count++];
+    memset(relation, 0, sizeof(*relation));
+    safe_copy(relation->id, sizeof(relation->id), relation_id);
+    safe_copy(relation->conflict_zone_id, sizeof(relation->conflict_zone_id), conflict_zone_id);
+    return relation;
+}
+
+static void conflict_relation_add_participant(
+    MapConflictRelation* relation,
+    const char* lanelet_id,
+    const char* movement
+)
+{
+    if (!relation || !lanelet_id || lanelet_id[0] == '\0') {
+        return;
+    }
+
+    if (relation->participant_count >= MAP_MAX_CZ_PARTICIPANTS) {
+        fprintf(stderr,
+                "[IntersectionMap] conflict relation %s participant capacity exceeded\n",
+                relation->id);
+        return;
+    }
+
+    MapConflictParticipant* participant = &relation->participants[relation->participant_count++];
+    safe_copy(participant->lanelet_id, sizeof(participant->lanelet_id), lanelet_id);
+    safe_copy(participant->movement, sizeof(participant->movement), movement ? movement : "");
+}
+
 /* -------------------------------------------------------------------------- */
 /* XML parsing pieces                                                         */
 
@@ -545,6 +591,13 @@ static void parse_lanelets(
         get_attr_string(p, "maneuver", lane.maneuver, sizeof(lane.maneuver));
         get_attr_int(p, "travel_heading_deg", &lane.travel_heading_deg);
 
+        char unprotected_left[16] = {0};
+        if (get_attr_string(p, "unprotected_left", unprotected_left, sizeof(unprotected_left))) {
+            lane.unprotected_left = strcmp(unprotected_left, "true") == 0 ||
+                                    strcmp(unprotected_left, "yes") == 0 ||
+                                    strcmp(unprotected_left, "1") == 0;
+        }
+
         /*
          * lanelet tag 자체에 traffic_light_ref가 있는 경우 먼저 저장.
          * regulatory_element에서도 한 번 더 보강한다.
@@ -608,27 +661,61 @@ static void parse_regulatory_elements(IntersectionMap* map, const char* xml)
             }
         }
         else if (strcmp(type, "conflict_zone") == 0) {
+            char relation_id[MAP_MAX_ID_LEN] = {0};
             char cz_id[MAP_MAX_ID_LEN] = {0};
+
+            get_attr_string(p, "id", relation_id, sizeof(relation_id));
 
             const char* cz_ref = strstr(p, "<conflict_zone_ref ");
             if (cz_ref && cz_ref < end) {
                 get_attr_string(cz_ref, "id", cz_id, sizeof(cz_id));
             }
 
+            MapConflictRelation* relation = NULL;
             const char* scan = p;
-            while ((scan = strstr(scan, "<applies_to ")) != NULL && scan < end) {
+            bool has_participant = false;
+
+            while ((scan = strstr(scan, "<participant ")) != NULL && scan < end) {
                 char lane_id[MAP_MAX_ID_LEN] = {0};
+                char movement[MAP_MAX_ID_LEN] = {0};
 
                 if (get_attr_string(scan, "lanelet_id", lane_id, sizeof(lane_id))) {
+                    get_attr_string(scan, "movement", movement, sizeof(movement));
+
+                    if (!relation) {
+                        relation = map_add_conflict_relation(map, relation_id, cz_id);
+                    }
+
+                    conflict_relation_add_participant(relation, lane_id, movement);
+
                     MapLanelet* lane = find_lanelet_mut(map, lane_id);
                     if (lane) {
                         lanelet_add_conflict_zone(lane, cz_id);
                     }
+                    has_participant = true;
                 }
 
                 const char* next = strchr(scan, '>');
                 if (!next || next >= end) break;
                 scan = next + 1;
+            }
+
+            if (!has_participant) {
+                scan = p;
+                while ((scan = strstr(scan, "<applies_to ")) != NULL && scan < end) {
+                    char lane_id[MAP_MAX_ID_LEN] = {0};
+
+                    if (get_attr_string(scan, "lanelet_id", lane_id, sizeof(lane_id))) {
+                        MapLanelet* lane = find_lanelet_mut(map, lane_id);
+                        if (lane) {
+                            lanelet_add_conflict_zone(lane, cz_id);
+                        }
+                    }
+
+                    const char* next = strchr(scan, '>');
+                    if (!next || next >= end) break;
+                    scan = next + 1;
+                }
             }
         }
 
@@ -680,6 +767,7 @@ bool intersection_map_load_xml(IntersectionMap* map, const char* xml_path)
     printf("  lanelets=%d\n", map->lanelet_count);
     printf("  areas=%d\n", map->area_count);
     printf("  conflict_zones=%d\n", map->conflict_zone_count);
+    printf("  conflict_relations=%d\n", map->conflict_relation_count);
     printf("  traffic_lights=%d\n", map->traffic_light_count);
     printf("  intersection_center=%s\n",
            map->intersection_center_id[0] ? map->intersection_center_id : "NONE");
@@ -762,6 +850,47 @@ size_t intersection_map_get_conflict_zone_ids(
 
     for (int i = 0; i < lane->conflict_zone_count && count < max_out; i++) {
         out_ids[count++] = lane->conflict_zone_ids[i];
+    }
+
+    return count;
+}
+
+size_t intersection_map_get_conflict_zone_ids_for_movement(
+    const IntersectionMap* map,
+    const char* lane_id,
+    const char* movement,
+    const char* out_ids[],
+    size_t max_out
+)
+{
+    if (!map || !lane_id || !movement || !out_ids || max_out == 0) {
+        return 0;
+    }
+
+    size_t count = 0;
+
+    for (int i = 0; i < map->conflict_relation_count && count < max_out; i++) {
+        const MapConflictRelation* relation = &map->conflict_relations[i];
+
+        for (int j = 0; j < relation->participant_count; j++) {
+            const MapConflictParticipant* participant = &relation->participants[j];
+
+            if (strcmp(participant->lanelet_id, lane_id) == 0 &&
+                strcmp(participant->movement, movement) == 0) {
+                bool exists = false;
+                for (size_t k = 0; k < count; k++) {
+                    if (strcmp(out_ids[k], relation->conflict_zone_id) == 0) {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists) {
+                    out_ids[count++] = relation->conflict_zone_id;
+                }
+                break;
+            }
+        }
     }
 
     return count;

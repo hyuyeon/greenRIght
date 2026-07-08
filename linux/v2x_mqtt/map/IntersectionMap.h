@@ -12,6 +12,8 @@
 #define MAP_MAX_CONFLICT_ZONES    16
 #define MAP_MAX_POLYGON_POINTS    8
 #define MAP_MAX_CZ_PER_LANE       8
+#define MAP_MAX_CONFLICT_RELATIONS 32
+#define MAP_MAX_CZ_PARTICIPANTS    4
 
 typedef enum {
     MAP_QUERY_NOT_FOUND = 0,
@@ -40,6 +42,7 @@ typedef struct {
 
     int travel_heading_deg;
     char maneuver[MAP_MAX_ID_LEN];
+    bool unprotected_left;
 
     char traffic_light_id[MAP_MAX_ID_LEN];
 
@@ -53,6 +56,19 @@ typedef struct {
     int point_count;
     MapPoint area_points[MAP_MAX_POLYGON_POINTS];
 } MapArea;
+
+typedef struct {
+    char lanelet_id[MAP_MAX_ID_LEN];
+    char movement[MAP_MAX_ID_LEN];
+} MapConflictParticipant;
+
+typedef struct {
+    char id[MAP_MAX_ID_LEN];
+    char conflict_zone_id[MAP_MAX_ID_LEN];
+
+    int participant_count;
+    MapConflictParticipant participants[MAP_MAX_CZ_PARTICIPANTS];
+} MapConflictRelation;
 
 typedef struct {
     char id[MAP_MAX_ID_LEN];
@@ -71,6 +87,9 @@ typedef struct {
 
     int conflict_zone_count;
     MapArea conflict_zones[MAP_MAX_CONFLICT_ZONES];
+
+    int conflict_relation_count;
+    MapConflictRelation conflict_relations[MAP_MAX_CONFLICT_RELATIONS];
 
     char intersection_center_id[MAP_MAX_ID_LEN];
 } IntersectionMap;
@@ -106,6 +125,18 @@ MapQueryResult intersection_map_get_lane_id(
 size_t intersection_map_get_conflict_zone_ids(
     const IntersectionMap* map,
     const char* lane_id,
+    const char* out_ids[],
+    size_t max_out
+);
+
+/*
+ * lane_id와 movement 조합에 연결된 conflict zone ID 목록을 조회한다.
+ * movement 예: "straight", "right_turn", "left_turn"
+ */
+size_t intersection_map_get_conflict_zone_ids_for_movement(
+    const IntersectionMap* map,
+    const char* lane_id,
+    const char* movement,
     const char* out_ids[],
     size_t max_out
 );
