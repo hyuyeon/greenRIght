@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -125,32 +126,9 @@ static bool poll_mock(CanHandler* handler)
     return true;
 }
 
-bool can_handler_init(
-    CanHandler* handler,
-    const char* ifname,
-    bool mock_mode,
-    const CanHandlerCallbacks* callbacks
-)
+#ifdef __linux__
+static bool open_socketcan(CanHandler* handler, const char* ifname)
 {
-    if (!handler) return false;
-    memset(handler, 0, sizeof(*handler));
-    handler->ifname = ifname;
-    handler->fd = -1;
-    handler->mock_mode = mock_mode;
-    if (callbacks) {
-        handler->callbacks = *callbacks;
-    }
-
-    if (mock_mode) {
-        handler->initialized = true;
-        printf("[CanHandler] init if=%s mock=1\n", ifname ? ifname : "none");
-        return true;
-    }
-
-#ifndef __linux__
-    fprintf(stderr, "[CanHandler] real SocketCAN is only available on Linux.\n");
-    return false;
-#else
     struct sockaddr_can addr;
     struct ifreq ifr;
 
@@ -181,8 +159,52 @@ bool can_handler_init(
         return false;
     }
 
+    printf("[CanHandler] tx/rx socket opened if=%s\n", ifr.ifr_name);
+    return true;
+}
+#endif
+
+bool can_handler_init(
+    CanHandler* handler,
+    const char* ifname,
+    bool mock_mode,
+    const CanHandlerCallbacks* callbacks
+)
+{
+    if (!handler) return false;
+    memset(handler, 0, sizeof(*handler));
+    handler->ifname = ifname;
+    handler->fd = -1;
+    handler->mock_mode = mock_mode;
+    if (callbacks) {
+        handler->callbacks = *callbacks;
+    }
+
+    if (mock_mode) {
+#ifdef __linux__
+        const char* tx_real_env = getenv("CAN_TX_REAL");
+        bool tx_real = tx_real_env && strcmp(tx_real_env, "1") == 0;
+        if (tx_real && !open_socketcan(handler, ifname)) {
+            return false;
+        }
+#endif
+        handler->initialized = true;
+        printf(
+            "[CanHandler] init if=%s rx_mock=1 tx_real=%s\n",
+            ifname ? ifname : "none",
+            handler->fd >= 0 ? "1" : "0"
+        );
+        return true;
+    }
+
+#ifndef __linux__
+    fprintf(stderr, "[CanHandler] real SocketCAN is only available on Linux.\n");
+    return false;
+#else
+    if (!open_socketcan(handler, ifname)) return false;
+
     handler->initialized = true;
-    printf("[CanHandler] init if=%s\n", ifr.ifr_name);
+    printf("[CanHandler] init if=%s rx_real=1 tx_real=1\n", ifname ? ifname : "can0");
     return true;
 #endif
 }
@@ -253,7 +275,7 @@ static bool can_handler_send_raw_frame(CanHandler* handler, uint8_t message_id, 
     raw |= ((uint64_t)update_mask & 0xFFu) << 40;
     raw |= payload40 & 0xFFFFFFFFFFULL;
 
-    if (handler->mock_mode) {
+    if (handler->mock_mode && handler->fd < 0) {
         return true;
     }
 
