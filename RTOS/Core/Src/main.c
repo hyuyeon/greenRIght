@@ -421,7 +421,7 @@ void vTask_CAN_Rx(void *argument)
             Uart3_Printf("\r\n");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(5));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
