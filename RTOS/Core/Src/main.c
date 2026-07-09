@@ -278,11 +278,33 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
         break;
 
     case 0x6:     // Traffic Light
-        tl.color     = (frame >> 30) & 0x03;
-        tl.time_left = (frame >> 26) & 0x0F;
-        tl.cz_x      = (frame >> 16) & 0x3FF;
-        tl.cz_y      = (frame >> 5)  & 0x7FF;
-        break;
+        {
+            // 1. 수신된 프레임에서 새로운 값 추출
+            uint8_t new_color     = (frame >> 30) & 0x03;
+            uint8_t new_time_left = (frame >> 26) & 0x0F;
+
+            // 2. 기존 값과 비교하여 변경 플래그 만들깅
+            uint8_t is_changed = 0;
+            if ((tl.color != new_color) || (tl.time_left != new_time_left))
+            {
+                is_changed = 1;
+            }
+
+            // 3. 전역 상태 갱신
+            tl.color     = new_color;
+            tl.time_left = new_time_left;
+            tl.cz_x      = (frame >> 16) & 0x3FF;
+            tl.cz_y      = (frame >> 5)  & 0x7FF;
+
+            // 4. 값이 변경되었다면 세마포어 전달
+            if (is_changed)
+            {
+            	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            	xSemaphoreGiveFromISR(tlDisplaySem, &xHigherPriorityTaskWoken);
+            	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+            }
+            break;
+        }
 
     default:
         return 0;

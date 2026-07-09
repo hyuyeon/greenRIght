@@ -99,6 +99,22 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+/* maneuver 값 */
+#define MANEUVER_STRAIGHT          0U
+#define MANEUVER_RIGHT_TURN        1U
+#define MANEUVER_LEFT_TURN_UNPROT  2U
+#define MANEUVER_LEFT_TURN_PROT    3U
+
+
+/* candidateVehicle.type 값 */
+#define CAND_NONE                  0U
+
+#define CAND_RT_LEFT_STRAIGHT      1U  /* 자차 우회전 vs 좌측 직진 */
+#define CAND_RT_OPP_LEFT           2U  /* 자차 우회전 vs 대향 보호 좌회전 */
+
+#define CAND_LT_OPP_STRAIGHT       4U  /* 자차 비보호 좌회전 vs 대향 직진 */
+#define CAND_LT_OPP_RIGHT          8U  /* 자차 비보호 좌회전 vs 대향 우회전 */
+
 typedef struct
 {
     uint8_t msg_id;      // 4bit
