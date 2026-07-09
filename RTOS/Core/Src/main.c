@@ -16,8 +16,8 @@ CAN_Header_t rx_header;
 
 // 어플리케이션 계층 전역 상태 변수 (CAN_Rx/Tx에서 다이렉트로 접근)
 EgoVehicle ego;
-CandidateVehicle candidate;
-TrafficLight trafficLight;
+CandidateVehicle candidateVehicle;
+TrafficLight tl;
 
 osThreadId defaultTaskHandle;
 
@@ -170,24 +170,24 @@ void CAN_Tx(uint16_t can_id, CAN_Header_t *header)
         frame |= ((uint64_t)(ego.heading    & 0x1FF)) << 2;
         break;
 
-    case 0x4:     // Crosswalk Zone (Candidate)
-        frame |= ((uint64_t)(candidate.type & 0xFF))  << 32;
-        frame |= ((uint64_t)(candidate.cz_x & 0x3FF)) << 22;
-        frame |= ((uint64_t)(candidate.cz_y & 0x7FF)) << 11;
+    case 0x4:     // Crosswalk Zone (candidateVehicle)
+        frame |= ((uint64_t)(candidateVehicle.type & 0xFF))  << 32;
+        frame |= ((uint64_t)(candidateVehicle.cz_x & 0x3FF)) << 22;
+        frame |= ((uint64_t)(candidateVehicle.cz_y & 0x7FF)) << 11;
         break;
 
-    case 0x5:     // Opposite Vehicle (Candidate)
-        frame |= ((uint64_t)(candidate.type  & 0xFF))  << 32;
-        frame |= ((uint64_t)(candidate.speed & 0xFF))  << 24;
-        frame |= ((uint64_t)(candidate.x     & 0x3FF)) << 14;
-        frame |= ((uint64_t)(candidate.y     & 0x7FF)) << 3;
+    case 0x5:     // Opposite Vehicle (candidateVehicle)
+        frame |= ((uint64_t)(candidateVehicle.type  & 0xFF))  << 32;
+        frame |= ((uint64_t)(candidateVehicle.speed & 0xFF))  << 24;
+        frame |= ((uint64_t)(candidateVehicle.x     & 0x3FF)) << 14;
+        frame |= ((uint64_t)(candidateVehicle.y     & 0x7FF)) << 3;
         break;
 
     case 0x6:     // Traffic Light
-        frame |= ((uint64_t)(trafficLight.color     & 0x03)) << 30;
-        frame |= ((uint64_t)(trafficLight.time_left & 0x0F)) << 26;
-        frame |= ((uint64_t)(trafficLight.cz_x      & 0x3FF)) << 16;
-        frame |= ((uint64_t)(trafficLight.cz_y      & 0x7FF)) << 5;
+        frame |= ((uint64_t)(tl.color     & 0x03)) << 30;
+        frame |= ((uint64_t)(tl.time_left & 0x0F)) << 26;
+        frame |= ((uint64_t)(tl.cz_x      & 0x3FF)) << 16;
+        frame |= ((uint64_t)(tl.cz_y      & 0x7FF)) << 5;
         break;
     }
 
@@ -262,26 +262,26 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
         ego.timestamp = header->timestamp;
         break;
 
-    case 0x4:     // Crosswalk Zone (Candidate)
-        candidate.type = (frame >> 32) & 0xFF;
-        candidate.cz_x = (frame >> 22) & 0x3FF;
-        candidate.cz_y = (frame >> 11) & 0x7FF;
-        candidate.timestamp_ms = header->timestamp;
+    case 0x4:     // Crosswalk Zone (candidateVehicle)
+        candidateVehicle.type = (frame >> 32) & 0xFF;
+        candidateVehicle.cz_x = (frame >> 22) & 0x3FF;
+        candidateVehicle.cz_y = (frame >> 11) & 0x7FF;
+        candidateVehicle.timestamp_ms = header->timestamp;
         break;
 
-    case 0x5:     // Opposite Vehicle (Candidate)
-        candidate.type  = (frame >> 32) & 0xFF;
-        candidate.speed = (frame >> 24) & 0xFF;
-        candidate.x     = (frame >> 14) & 0x3FF;
-        candidate.y     = (frame >> 3)  & 0x7FF;
-        candidate.timestamp_ms = header->timestamp;
+    case 0x5:     // Opposite Vehicle (candidateVehicle)
+        candidateVehicle.type  = (frame >> 32) & 0xFF;
+        candidateVehicle.speed = (frame >> 24) & 0xFF;
+        candidateVehicle.x     = (frame >> 14) & 0x3FF;
+        candidateVehicle.y     = (frame >> 3)  & 0x7FF;
+        candidateVehicle.timestamp_ms = header->timestamp;
         break;
 
     case 0x6:     // Traffic Light
-        trafficLight.color     = (frame >> 30) & 0x03;
-        trafficLight.time_left = (frame >> 26) & 0x0F;
-        trafficLight.cz_x      = (frame >> 16) & 0x3FF;
-        trafficLight.cz_y      = (frame >> 5)  & 0x7FF;
+        tl.color     = (frame >> 30) & 0x03;
+        tl.time_left = (frame >> 26) & 0x0F;
+        tl.cz_x      = (frame >> 16) & 0x3FF;
+        tl.cz_y      = (frame >> 5)  & 0x7FF;
         break;
 
     default:
@@ -362,10 +362,10 @@ void vTask_CAN_Tx(void *argument)
     };
 
     // 송신할 데이터를 전역 변수에 다이렉트로 할당
-    candidate.type = 0x01;
-    candidate.speed = 60;
-    candidate.x = 120;
-    candidate.y = 350;
+    candidateVehicle.type = 0x01;
+    candidateVehicle.speed = 60;
+    candidateVehicle.x = 120;
+    candidateVehicle.y = 350;
 
     while(1)
     {

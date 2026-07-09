@@ -142,8 +142,8 @@ extern CAN_Header_t rx_header;
 
 // 전역 변수로 관리되는 상태 객체들
 extern EgoVehicle ego;
-extern CandidateVehicle candidate;
-extern TrafficLight trafficLight;
+extern CandidateVehicle candidateVehicle;
+extern TrafficLight tl;
 
 /* USER CODE END Private defines */
 
