@@ -207,18 +207,22 @@ void CAN1_RX0_IRQHandler(void)
             break;
 
         case 0x4:
+        	Uart3_Printf(
+        	                "[CAND] [%u] type=%u cz=(%u,%u)\r\n",
+        					rx_header.msg_id,
+        					candidateVehicle.type,
+        					candidateVehicle.cz_x,
+        	                candidateVehicle.cz_y
+        	            );
+        	            break;
         case 0x5:
             Uart3_Printf(
-                "[CAND] [%u] type=%u cz=(%u,%u) pos=(%u,%u) speed=%u tx_time=%llu rx_time=%llu\r\n",
+                "[CAND] [%u] type=%u pos=(%u,%u) speed=%u\r\n",
 				rx_header.msg_id,
 				candidateVehicle.type,
-				candidateVehicle.cz_x,
-                candidateVehicle.cz_y,
                 candidateVehicle.x,
                 candidateVehicle.y,
-                candidateVehicle.speed,
-                candidateVehicle.timestamp_ms,
-                candidateVehicle.received_timestamp
+                candidateVehicle.speed
             );
             break;
 

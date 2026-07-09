@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <semphr.h>
 
 UART_HandleTypeDef huart3;
 
@@ -18,7 +19,7 @@ CAN_Header_t rx_header;
 EgoVehicle ego;
 CandidateVehicle candidateVehicle;
 TrafficLight tl;
-
+volatile uint8_t maneuver;
 osThreadId defaultTaskHandle;
 
 /* USER CODE BEGIN PV */
@@ -276,8 +277,10 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
         candidateVehicle.y     = (frame >> 3)  & 0x7FF;
         candidateVehicle.timestamp_ms = header->timestamp;
         //고객 최유현 #2
-        //if(candidateVehicle.type == 0)
-        //
+        // Opposite Vehicle 메시지를 받으면 항상 TurnJudgeTask 실행
+//        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//        xSemaphoreGiveFromISR(turnJudgeSem, &xHigherPriorityTaskWoken);
+//        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         break;
 
     case 0x6:     // Traffic Light
@@ -298,6 +301,25 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
             tl.time_left = new_time_left;
             tl.cz_x      = (frame >> 16) & 0x3FF;
             tl.cz_y      = (frame >> 5)  & 0x7FF;
+            //고객 최유현 #1
+            // bit4~3 추출해서 maneuver에 저장하깅
+            maneuver = (frame >> 3) & 0x03;
+
+//            // 기존 maneuver 저장
+//            uint8_t prev_maneuver = maneuver;
+//
+//            // 새 maneuver 갱신
+//            maneuver = (frame >> 3) & 0x03;
+//
+//            // 우회전/비보호 좌회전 -> 직진으로 변경되었는지 확인
+//            if ((maneuver == MANEUVER_STRAIGHT) &&
+//                ((prev_maneuver == MANEUVER_RIGHT_TURN) ||
+//                 (prev_maneuver == MANEUVER_LEFT_TURN_UNPROT)))
+//            {
+//                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//                xSemaphoreGiveFromISR(turnJudgeSem, &xHigherPriorityTaskWoken);
+//                portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+//            }
 
             //고객 최유현 #1
             //값이 변경되었다면 세마포어 전달

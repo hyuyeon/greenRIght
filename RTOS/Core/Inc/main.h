@@ -161,6 +161,12 @@ extern EgoVehicle ego;
 extern CandidateVehicle candidateVehicle;
 extern TrafficLight tl;
 
+//SemaphoreHandle_t turnJudgeSem; //judgement task 깨우는 애
+//SemaphoreHandle_t tlDisplaySem; //tlDisplay task 깨우는 애
+//SemaphoreHandle_t buzzerSem; //buzzer task 깨우는 애
+
+extern volatile uint8_t maneuver;
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
