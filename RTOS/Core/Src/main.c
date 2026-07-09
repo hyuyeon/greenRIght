@@ -275,6 +275,9 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
         candidateVehicle.x     = (frame >> 14) & 0x3FF;
         candidateVehicle.y     = (frame >> 3)  & 0x7FF;
         candidateVehicle.timestamp_ms = header->timestamp;
+        //고객 최유현 #2
+        //if(candidateVehicle.type == 0)
+        //
         break;
 
     case 0x6:     // Traffic Light
@@ -296,13 +299,14 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
             tl.cz_x      = (frame >> 16) & 0x3FF;
             tl.cz_y      = (frame >> 5)  & 0x7FF;
 
-            // 4. 값이 변경되었다면 세마포어 전달
-            if (is_changed)
-            {
-            	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            	xSemaphoreGiveFromISR(tlDisplaySem, &xHigherPriorityTaskWoken);
-            	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-            }
+            //고객 최유현 #1
+            //값이 변경되었다면 세마포어 전달
+//            if (is_changed)
+//            {
+//            	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//            	xSemaphoreGiveFromISR(tlDisplaySem, &xHigherPriorityTaskWoken);
+//            	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+//            }
             break;
         }
 

@@ -184,73 +184,74 @@ void SysTick_Handler(void)
 
 //stm32f4xx_it.c
 /* USER CODE BEGIN 1 */
-//void CAN1_RX0_IRQHandler(void)
-//{
-//    Uart3_Printf("IRQ FMP0=%lu\r\n", CAN1->RF0R & CAN_RF0R_FMP0);
-//
-//    // payload 포인터 날리고 바로 호출 (내부에서 전역변수 다이렉트 수정)
-//    if(CAN_Rx(&rx_id, &rx_header))
-//    {
-//        canRxFlag = 1;
-//
-//        switch(rx_header.msg_id)
-//        {
-//        case 0x0:
-//            Uart3_Printf(
-//                "[EGO] x=%u y=%u speed=%u heading=%u timestamp=%u\r\n",
-//                ego.x,
-//                ego.y,
-//                ego.speed,
-//                ego.heading,
-//                ego.timestamp
-//            );
-//            break;
-//
-//        case 0x4:
-//        case 0x5:
-//            Uart3_Printf(
-//                "[CAND] type=%u cz=(%u,%u) pos=(%u,%u) speed=%u tx_time=%llu rx_time=%llu\r\n",
-//				candidateVehicle.type,
-//				candidateVehicle.cz_x,
-//                candidateVehicle.cz_y,
-//                candidateVehicle.x,
-//                candidateVehicle.y,
-//                candidateVehicle.speed,
-//                candidateVehicle.timestamp_ms,
-//                candidateVehicle.received_timestamp
-//            );
-//            break;
-//
-//        case 0x6:
-//            Uart3_Printf(
-//                "[TL] color=%u time_left=%u cz=(%u,%u)\r\n",
-//                tl.color,
-//                tl.time_left,
-//                tl.cz_x,
-//                tl.cz_y
-//            );
-//            break;
-//
-//        default:
-//            Uart3_Printf(
-//                "[RX] Unknown MSG_ID=%u\r\n",
-//                rx_header.msg_id
-//            );
-//            break;
-//        }
-//    }
-//    else
-//    {
-//        Uart3_Printf("CAN_Rx FAIL\r\n");
-//    }
-//}
 void CAN1_RX0_IRQHandler(void)
 {
+    Uart3_Printf("IRQ FMP0=%lu\r\n", CAN1->RF0R & CAN_RF0R_FMP0);
+
+    // payload 포인터 날리고 바로 호출 (내부에서 전역변수 다이렉트 수정)
     if(CAN_Rx(&rx_id, &rx_header))
     {
         canRxFlag = 1;
 
-        __NOP();// breakpoint for debugging
+        switch(rx_header.msg_id)
+        {
+        case 0x0:
+            Uart3_Printf(
+                "[EGO] x=%u y=%u speed=%u heading=%u timestamp=%u\r\n",
+                ego.x,
+                ego.y,
+                ego.speed,
+                ego.heading,
+                ego.timestamp
+            );
+            break;
+
+        case 0x4:
+        case 0x5:
+            Uart3_Printf(
+                "[CAND] [%u] type=%u cz=(%u,%u) pos=(%u,%u) speed=%u tx_time=%llu rx_time=%llu\r\n",
+				rx_header.msg_id,
+				candidateVehicle.type,
+				candidateVehicle.cz_x,
+                candidateVehicle.cz_y,
+                candidateVehicle.x,
+                candidateVehicle.y,
+                candidateVehicle.speed,
+                candidateVehicle.timestamp_ms,
+                candidateVehicle.received_timestamp
+            );
+            break;
+
+        case 0x6:
+            Uart3_Printf(
+                "[TL] color=%u time_left=%u cz=(%u,%u)\r\n",
+                tl.color,
+                tl.time_left,
+                tl.cz_x,
+                tl.cz_y
+            );
+            break;
+
+        default:
+            Uart3_Printf(
+                "[RX] Unknown MSG_ID=%u\r\n",
+                rx_header.msg_id
+            );
+            break;
+        }
+    }
+    else
+    {
+        Uart3_Printf("CAN_Rx FAIL\r\n");
     }
 }
+//void CAN1_RX0_IRQHandler(void)
+//{
+//    if(CAN_Rx(&rx_id, &rx_header))
+//    {
+//        canRxFlag = 1;
+//
+//        __NOP();// breakpoint for debugging
+//    }
+//}
 /* USER CODE END 1 */
