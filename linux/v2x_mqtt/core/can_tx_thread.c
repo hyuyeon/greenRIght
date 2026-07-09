@@ -7,6 +7,7 @@
 #include <time.h>
 
 #define CANDIDATE_TX_PERIOD_MS 50
+#define CANDIDATE_STATUS_TX_REAL_PERIOD_MS 1000
 #define CANDIDATE_ID_NONE VEHICLE_ID_NONE
 #define TYPE_MASK_NONE 0
 #define TYPE_MASK_RIGHT_VS_STRAIGHT 1
@@ -252,10 +253,14 @@ static void* can_tx_thread_main(void* arg)
 {
     AppContext* context = (AppContext*)arg;
     bool last_active = false;
+    bool last_had_candidate = false;
     uint8_t last_intro_vehicle_id = CANDIDATE_ID_NONE;
+    uint32_t candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
 
     while (atomic_load(&context->running)) {
         bool active = atomic_load(&context->candidate_vehicle_tx_enabled);
+        bool status_due = !context->can_tx_real ||
+            candidate_status_elapsed_ms >= CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
         VehicleInfo self;
         CandidateSelection selection;
         memset(&self, 0, sizeof(self));
@@ -269,17 +274,24 @@ static void* can_tx_thread_main(void* arg)
                 other_vehicle_manager_set_candidate(&context->others, NULL);
                 printf("[can_tx_thread] candidate vehicle tx stopped\n");
                 last_active = false;
+                last_had_candidate = false;
                 last_intro_vehicle_id = CANDIDATE_ID_NONE;
+                candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
             }
 
             send_candidate_traffic_light(context, has_self ? &self : NULL, NULL);
             sleep_ms(CANDIDATE_TX_PERIOD_MS);
+            candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
             continue;
         }
 
         if (!last_active) {
             printf("[can_tx_thread] candidate vehicle tx started\n");
             last_active = true;
+            last_had_candidate = false;
+            last_intro_vehicle_id = CANDIDATE_ID_NONE;
+            candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
+            status_due = true;
         }
 
         if (has_self) {
@@ -296,16 +308,26 @@ static void* can_tx_thread_main(void* arg)
                     selection.conflict_zone_center_y
                 );
                 last_intro_vehicle_id = selection.vehicle.vehicle_id;
+                status_due = true;
             }
-            can_handler_send_candidate_vehicle_status(&context->can, selection.type_mask, &selection.vehicle);
+            if (status_due) {
+                can_handler_send_candidate_vehicle_status(&context->can, selection.type_mask, &selection.vehicle);
+                candidate_status_elapsed_ms = 0;
+            }
+            last_had_candidate = true;
         } else {
             other_vehicle_manager_set_candidate(&context->others, NULL);
-            can_handler_send_no_candidate_vehicle(&context->can);
+            if (status_due || last_had_candidate) {
+                can_handler_send_no_candidate_vehicle(&context->can);
+                candidate_status_elapsed_ms = 0;
+            }
             last_intro_vehicle_id = CANDIDATE_ID_NONE;
+            last_had_candidate = false;
         }
 
         send_candidate_traffic_light(context, has_self ? &self : NULL, has_candidate ? &selection : NULL);
         sleep_ms(CANDIDATE_TX_PERIOD_MS);
+        candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
     }
     return NULL;
 }

@@ -30,7 +30,9 @@ static bool app_init(AppContext* app, int argc, char** argv)
     const char* map_path = argc > 3 ? argv[3] : DEFAULT_MAP_PATH;
     uint8_t vehicle_id = argc > 4 ? (uint8_t)atoi(argv[4]) : DEFAULT_VEHICLE_ID;
     const char* can_mock_env = getenv("CAN_MOCK");
+    const char* can_tx_real_env = getenv("CAN_TX_REAL");
     bool can_mock = can_mock_env && strcmp(can_mock_env, "1") == 0;
+    bool can_tx_real = can_tx_real_env && strcmp(can_tx_real_env, "1") == 0;
 
     memset(app, 0, sizeof(*app));
     atomic_init(&app->running, true);
@@ -45,6 +47,7 @@ static bool app_init(AppContext* app, int argc, char** argv)
     app->vehicle_id = vehicle_id;
     app->can_ifname = "can0";
     app->can_mock = can_mock;
+    app->can_tx_real = can_tx_real;
 
     return true;
 }

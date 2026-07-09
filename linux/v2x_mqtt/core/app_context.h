@@ -19,6 +19,7 @@ typedef struct {
     uint8_t vehicle_id;
     const char* can_ifname;
     bool can_mock;
+    bool can_tx_real;
     CanHandler can;
     MqttHandler mqtt;
     MapService map;
