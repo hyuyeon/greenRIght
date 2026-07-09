@@ -211,20 +211,45 @@ uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
     }
 
     *can_id = (CAN1->sFIFOMailBox[0].RIR >> 21) & 0x7FF;
+    //뉴 방식
+    uint32_t rdlr = CAN1->sFIFOMailBox[0].RDLR;
+    uint32_t rdhr = CAN1->sFIFOMailBox[0].RDHR;
 
-    uint32_t low  = CAN1->sFIFOMailBox[0].RDLR;
-    uint32_t high = CAN1->sFIFOMailBox[0].RDHR;
+    uint8_t b0 = (uint8_t)((rdlr >> 0)  & 0xFF);
+    uint8_t b1 = (uint8_t)((rdlr >> 8)  & 0xFF);
+    uint8_t b2 = (uint8_t)((rdlr >> 16) & 0xFF);
+    uint8_t b3 = (uint8_t)((rdlr >> 24) & 0xFF);
+
+    uint8_t b4 = (uint8_t)((rdhr >> 0)  & 0xFF);
+    uint8_t b5 = (uint8_t)((rdhr >> 8)  & 0xFF);
+    uint8_t b6 = (uint8_t)((rdhr >> 16) & 0xFF);
+    uint8_t b7 = (uint8_t)((rdhr >> 24) & 0xFF);
 
     CAN1->RF0R |= CAN_RF0R_RFOM0;
 
-    uint64_t frame = ((uint64_t)high << 32) | low;
+    uint64_t frame = 0;
+
+    frame |= ((uint64_t)b0 << 56);
+    frame |= ((uint64_t)b1 << 48);
+    frame |= ((uint64_t)b2 << 40);
+    frame |= ((uint64_t)b3 << 32);
+    frame |= ((uint64_t)b4 << 24);
+    frame |= ((uint64_t)b5 << 16);
+    frame |= ((uint64_t)b6 << 8);
+    frame |= ((uint64_t)b7 << 0);
+
+// 기존 방식
+//    uint32_t low  = CAN1->sFIFOMailBox[0].RDLR;
+//    uint32_t high = CAN1->sFIFOMailBox[0].RDHR;
+//
+//    CAN1->RF0R |= CAN_RF0R_RFOM0;
+//
+//    uint64_t frame = ((uint64_t)high << 32) | low;
 
     //================ Header 복원 =================//
     header->msg_id     = (frame >> 60) & 0x0F;
     header->timestamp  = (frame >> 48) & 0x0FFF;
     header->updateMask = (frame >> 40) & 0xFF;
-
-    Uart3_Printf("HIGH=%08lX LOW=%08lX\r\n", high, low);
 
     //================ Payload 복원 및 전역 상태 갱신 =================//
     switch(header->msg_id)
