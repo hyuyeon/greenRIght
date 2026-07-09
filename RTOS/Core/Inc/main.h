@@ -124,6 +124,13 @@ typedef struct
     uint16_t heading;     // 9bit
     uint8_t  turnSignal;  // 2bit
 } CAN_Payload_t;
+
+//for RX task to interrupt
+extern volatile uint8_t canRxFlag;
+extern volatile uint16_t rx_id;
+extern CAN_Header_t rx_header;
+extern CAN_Payload_t rx_payload;
+uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header, CAN_Payload_t *payload);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

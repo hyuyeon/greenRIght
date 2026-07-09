@@ -4,39 +4,21 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <time.h>
 
 UART_HandleTypeDef huart3;
+//for RX task to interrupt
+volatile uint8_t canRxFlag = 0;
+volatile uint16_t rx_id;
+CAN_Header_t rx_header;
+CAN_Payload_t rx_payload;
 
 osThreadId defaultTaskHandle;
 osThreadId myTask02Handle;
 /* USER CODE BEGIN PV */
 
-void UART3_Send_Byte(char ch){
-  if (ch=='\n'){                        // new line인 경우  '\n'을 추가전송
-      USART3->DR = 0x0d;
-      while (((USART3->SR >> 7)&0x1)==0);
-  }
-  USART3->DR = ch;
-  while (((USART3->SR >> 7)&0x1)==0);    // wait TXE
-}
-
-void UART3_Send_String(char* p){
-    while (*p){
-        UART3_Send_Byte(*p++);            // 널문자 전까지 출력
-    }
-}
-
-void Uart3_Printf(char *fmt,...)
-{
-  va_list ap;
-  char string[256];
-
-  va_start(ap,fmt);
-  vsprintf(string,fmt,ap);
-  va_end(ap);
-  UART3_Send_String(string);
-}
+void UART3_Send_Byte(char ch);
+void UART3_Send_String(char* p);
+void Uart3_Printf(char *fmt,...);
 
 void SystemClock_Config(void);
 static void MX_USART3_UART_Init(void);
@@ -48,15 +30,6 @@ void vTask_CAN_Tx(void *argument);
 void vTask_CAN_Rx(void *argument);
 
 /* USER CODE BEGIN PFP */
-
-void vTask_kbh(void * pvParameters)
-{
-    while(1)
-    {
-    	osDelay((rand() % 401) + 100);
-    	Uart3_Printf("%d ",rand()%10);
-    }
-}
 
 int main(void)
 {
@@ -70,7 +43,6 @@ int main(void)
 
   //UART 초기화
   MX_USART3_UART_Init();
-  srand((unsigned int)time(NULL));
   /* USER CODE BEGIN 2 */
   //CAN configuration
   CAN_Config();
@@ -91,46 +63,14 @@ int main(void)
       NULL,
       3,
       NULL);
-  /* USER CODE END 2 */
 
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-  /* definition and creation of myTask02 */
- // osThreadDef(myTask02, StartTask02, osPriorityIdle, 0, 256);
-  //myTask02Handle = osThreadCreate(osThread(myTask02), NULL);
-
-  /* definition and creation of myTask03 */
-  //osThreadDef(myTask03, StartTask03, osPriorityIdle, 0, 256);
-  //myTask03Handle = osThreadCreate(osThread(myTask03), NULL);
-
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
-
-  /* Start scheduler */
-//  Uart3_Printf("Before Scheduler\r\n");
+  Uart3_Printf("Before Scheduler\r\n");
   osKernelStart();
 
-  /* We should never get here as control is now taken by the scheduler */
+
   Uart3_Printf("After Scheduler\r\n");
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -191,7 +131,12 @@ void CAN_Config(void)
     // Normal mode
     CAN1->MCR &= ~CAN_MCR_INRQ;
     while(CAN1->MSR & CAN_MSR_INAK);
-//    Uart3_Printf("Normalmode ON\r\n");
+    CAN1->IER |= CAN_IER_FMPIE0;
+
+    // NVIC 설정
+    NVIC_SetPriority(CAN1_RX0_IRQn, 5);
+    NVIC_EnableIRQ(CAN1_RX0_IRQn);
+    Uart3_Printf("Normalmode ON\r\n");
 }
 
 void CAN_Tx(uint16_t can_id,
@@ -255,6 +200,7 @@ uint8_t CAN_Rx(uint16_t *can_id,
 
     uint32_t low  = CAN1->sFIFOMailBox[0].RDLR;
     uint32_t high = CAN1->sFIFOMailBox[0].RDHR;
+    CAN1->RF0R |= CAN_RF0R_RFOM0;
 
     uint64_t frame =
         ((uint64_t)high << 32) | low;
@@ -385,44 +331,32 @@ void vTask_CAN_Tx(void *argument)
 
 void vTask_CAN_Rx(void *argument)
 {
-	CAN_Header_t header;
-	CAN_Payload_t payload;
-    uint16_t id;
+    while(1){ulTaskNotifyTake(pdTRUE, portMAX_DELAY);}
+}
+void UART3_Send_Byte(char ch){
+  if (ch=='\n'){                        // new line인 경우  '\n'을 추가전송
+      USART3->DR = 0x0d;
+      while (((USART3->SR >> 7)&0x1)==0);
+  }
+  USART3->DR = ch;
+  while (((USART3->SR >> 7)&0x1)==0);    // wait TXE
+}
 
-    while(1)
-    {
-        if(CAN_Rx(&id, &header, &payload))
-        {
-            switch(id)
-            {
-                case 0x100:     // FW -> RTOS
-                    Uart3_Printf("[Rx : FW] %03X ",id);
-                    break;
-
-                case 0x300:     // RPi -> RTOS
-                    Uart3_Printf("[Rx : RPI] %03X ",id);
-                    break;
-
-                default:
-                    Uart3_Printf("[UNKNOWN %03X] ", id);
-                    break;
-            }
-
-            Uart3_Printf("MsgID=%u ", header.msg_id);
-            Uart3_Printf("TimeStamp=%u ", header.timestamp);
-            Uart3_Printf("Mask=%02X ", header.updateMask);
-
-            Uart3_Printf("Speed=%u ", payload.speed);
-            Uart3_Printf("X=%u ", payload.x);
-            Uart3_Printf("Y=%u ", payload.y);
-            Uart3_Printf("Heading=%u ", payload.heading);
-            Uart3_Printf("Turn=%u\r\n", payload.turnSignal);
-
-            Uart3_Printf("\r\n");
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(50));
+void UART3_Send_String(char* p){
+    while (*p){
+        UART3_Send_Byte(*p++);            // 널문자 전까지 출력
     }
+}
+
+void Uart3_Printf(char *fmt,...)
+{
+  va_list ap;
+  char string[256];
+
+  va_start(ap,fmt);
+  vsprintf(string,fmt,ap);
+  va_end(ap);
+  UART3_Send_String(string);
 }
 
 void Error_Handler(void)

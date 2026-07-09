@@ -182,6 +182,16 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32f4xx.s).                    */
 /******************************************************************************/
 
+//stm32f4xx_it.c
 /* USER CODE BEGIN 1 */
+void CAN1_RX0_IRQHandler(void)
+{
+    if(CAN_Rx(&rx_id, &rx_header, &rx_payload))
+    {
+        canRxFlag = 1;
 
+        Uart3_Printf("RX id=%03X\r\n", rx_id);
+
+    }
+}
 /* USER CODE END 1 */
