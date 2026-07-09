@@ -186,12 +186,62 @@ void SysTick_Handler(void)
 /* USER CODE BEGIN 1 */
 void CAN1_RX0_IRQHandler(void)
 {
-    if(CAN_Rx(&rx_id, &rx_header, &rx_payload))
+    Uart3_Printf("IRQ FMP0=%lu\r\n", CAN1->RF0R & CAN_RF0R_FMP0);
+
+    // payload 포인터 날리고 바로 호출 (내부에서 전역변수 다이렉트 수정)
+    if(CAN_Rx(&rx_id, &rx_header))
     {
         canRxFlag = 1;
 
-        Uart3_Printf("RX id=%03X\r\n", rx_id);
+        switch(rx_header.msg_id)
+        {
+        case 0x0:
+            Uart3_Printf(
+                "[EGO] x=%u y=%u speed=%u heading=%u timestamp=%u\r\n",
+                ego.x,
+                ego.y,
+                ego.speed,
+                ego.heading,
+                ego.timestamp
+            );
+            break;
 
+        case 0x4:
+        case 0x5:
+            Uart3_Printf(
+                "[CAND] type=%u cz=(%u,%u) pos=(%u,%u) speed=%u tx_time=%llu rx_time=%llu\r\n",
+                candidate.type,
+                candidate.cz_x,
+                candidate.cz_y,
+                candidate.x,
+                candidate.y,
+                candidate.speed,
+                candidate.timestamp_ms,
+                candidate.received_timestamp
+            );
+            break;
+
+        case 0x6:
+            Uart3_Printf(
+                "[TL] color=%u time_left=%u cz=(%u,%u)\r\n",
+                trafficLight.color,
+                trafficLight.time_left,
+                trafficLight.cz_x,
+                trafficLight.cz_y
+            );
+            break;
+
+        default:
+            Uart3_Printf(
+                "[RX] Unknown MSG_ID=%u\r\n",
+                rx_header.msg_id
+            );
+            break;
+        }
+    }
+    else
+    {
+        Uart3_Printf("CAN_Rx FAIL\r\n");
     }
 }
 /* USER CODE END 1 */

@@ -3,17 +3,6 @@
   ******************************************************************************
   * @file           : main.h
   * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -109,6 +98,7 @@ void Error_Handler(void);
 #define LD2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+
 typedef struct
 {
     uint8_t msg_id;      // 4bit
@@ -116,21 +106,45 @@ typedef struct
     uint8_t updateMask;  // 8bit
 } CAN_Header_t;
 
-typedef struct
-{
-    uint8_t  speed;       // 8bit
-    uint16_t x;           // 10bit
-    uint16_t y;           // 11bit
-    uint16_t heading;     // 9bit
-    uint8_t  turnSignal;  // 2bit
-} CAN_Payload_t;
+// [ 어플리케이션 전역 상태 구조체 (Direct 사용) ]
+typedef struct {
+    uint16_t x;              // 10 bit
+    uint16_t y;              // 11 bit
+    uint8_t speed;           // 8 bit
+    uint16_t heading;        // 9 bit
+    uint16_t timestamp;      // 12bit
+} EgoVehicle;
 
-//for RX task to interrupt
+typedef struct {
+    uint8_t type;
+    uint16_t cz_x;
+    uint16_t cz_y;
+    uint16_t x;
+    uint16_t y;
+    uint8_t speed;
+    uint64_t timestamp_ms;
+    uint64_t received_timestamp;
+} CandidateVehicle;
+
+typedef struct {
+    uint8_t color;
+    uint8_t time_left;
+    uint16_t cz_x;
+    uint16_t cz_y;
+} TrafficLight;
+
+// ========================================================
+// Global Extern Variables
+// ========================================================
 extern volatile uint8_t canRxFlag;
 extern volatile uint16_t rx_id;
 extern CAN_Header_t rx_header;
-extern CAN_Payload_t rx_payload;
-uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header, CAN_Payload_t *payload);
+
+// 전역 변수로 관리되는 상태 객체들
+extern EgoVehicle ego;
+extern CandidateVehicle candidate;
+extern TrafficLight trafficLight;
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

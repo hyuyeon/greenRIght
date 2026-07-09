@@ -6,16 +6,22 @@
 #include <stdlib.h>
 
 UART_HandleTypeDef huart3;
-//for RX task to interrupt
+
+// ========================================================
+// 전역 변수 정의
+// ========================================================
 volatile uint8_t canRxFlag = 0;
 volatile uint16_t rx_id;
 CAN_Header_t rx_header;
-CAN_Payload_t rx_payload;
+
+// 어플리케이션 계층 전역 상태 변수 (CAN_Rx/Tx에서 다이렉트로 접근)
+EgoVehicle ego;
+CandidateVehicle candidate;
+TrafficLight trafficLight;
 
 osThreadId defaultTaskHandle;
-osThreadId myTask02Handle;
-/* USER CODE BEGIN PV */
 
+/* USER CODE BEGIN PV */
 void UART3_Send_Byte(char ch);
 void UART3_Send_String(char* p);
 void Uart3_Printf(char *fmt,...);
@@ -23,38 +29,44 @@ void Uart3_Printf(char *fmt,...);
 void SystemClock_Config(void);
 static void MX_USART3_UART_Init(void);
 void CAN_Config(void);
-void CAN_Tx(uint16_t can_id,CAN_Header_t *header,CAN_Payload_t *payload);
-uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header, CAN_Payload_t *payload);
+
+// payload 매개변수가 제거된 송수신 함수
+void CAN_Tx(uint16_t can_id, CAN_Header_t *header);
+uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header);
+
 void StartDefaultTask(void const * argument);
 void vTask_CAN_Tx(void *argument);
 void vTask_CAN_Rx(void *argument);
+/* USER CODE END PV */
 
 /* USER CODE BEGIN PFP */
+/* USER CODE END PFP */
 
 int main(void)
 {
-  //시스템 클럭 설정 및 RTOS 설정
+  // 시스템 클럭 설정 및 RTOS 설정
   HAL_Init();
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
   /* USER CODE END SysInit */
 
-  //UART 초기화
+  // UART 초기화
   MX_USART3_UART_Init();
+
   /* USER CODE BEGIN 2 */
-  //CAN configuration
+  // CAN configuration
   CAN_Config();
-  BaseType_t ret;
-  ret = xTaskCreate(
-      vTask_CAN_Tx,
-      "CAN_TX",
-      256*4,
-      NULL,
-      3,
-      NULL);
-  Uart3_Printf("ret=%d\r\n", ret);
+
+//  BaseType_t ret;
+//  ret = xTaskCreate(
+//      vTask_CAN_Tx,
+//      "CAN_TX",
+//      256*4,
+//      NULL,
+//      3,
+//      NULL);
+//  Uart3_Printf("ret=%d\r\n", ret);
 
   xTaskCreate(
       vTask_CAN_Rx,
@@ -70,14 +82,12 @@ int main(void)
   Uart3_Printf("Before Scheduler\r\n");
   osKernelStart();
 
-
   Uart3_Printf("After Scheduler\r\n");
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -100,17 +110,16 @@ void CAN_Config(void)
     GPIOD->AFR[0] |= (9<<0) | (9<<4);
 
     // Init mode
-    CAN1->MCR = CAN_MCR_ABOM; // Automatic Bus-Off Recovery <- 씹새
+    CAN1->MCR = CAN_MCR_ABOM; // Automatic Bus-Off Recovery
     CAN1->MCR |= CAN_MCR_INRQ;
-    while(!(CAN1->MSR & CAN_MSR_INAK)); //wait until ACK comes
+    while(!(CAN1->MSR & CAN_MSR_INAK)); // wait until ACK comes
 
     // Bit Timing
-    CAN1->BTR |= (1 << 30);//loopback
-//    CAN1->BTR =
-//        ((1-1) << 24) |   // SJW = 1
-//        ((2-1) << 20) |   // TS2 = 2
-//        ((11-1) << 16) |  // TS1 = 11
-//        ((6-1) << 0);     // BRP = 6
+    CAN1->BTR =
+    		((1-1) << 24) |   // SJW = 1
+            ((2-1) << 20) |   // TS2 = 2
+            ((11-1) << 16) |  // TS1 = 11
+            ((6-1) << 0);     // BRP = 6
 
     // Filter Init
     CAN1->FMR |= CAN_FMR_FINIT;
@@ -131,6 +140,8 @@ void CAN_Config(void)
     // Normal mode
     CAN1->MCR &= ~CAN_MCR_INRQ;
     while(CAN1->MSR & CAN_MSR_INAK);
+
+    // RX 인터럽트 활성화
     CAN1->IER |= CAN_IER_FMPIE0;
 
     // NVIC 설정
@@ -139,84 +150,118 @@ void CAN_Config(void)
     Uart3_Printf("Normalmode ON\r\n");
 }
 
-void CAN_Tx(uint16_t can_id,
-            CAN_Header_t *header,
-            CAN_Payload_t *payload)
+void CAN_Tx(uint16_t can_id, CAN_Header_t *header)
 {
     uint64_t frame = 0;
 
-    //================ Header (24bit) ================//
-    frame |= ((uint64_t)(header->msg_id     & 0x0F)) << 60;//4
-    frame |= ((uint64_t)(header->timestamp	& 0xFF)) << 48;//8
-    frame |= ((uint64_t)(header->updateMask	& 0xFF)) << 40;//8
+    //================ Header 패킹 (24bit) ================//
+    frame |= ((uint64_t)(header->msg_id     & 0x0F)) << 60; // 4bit
+    frame |= ((uint64_t)(header->timestamp  & 0xFFF)) << 48; // 12bit
+    frame |= ((uint64_t)(header->updateMask & 0xFF)) << 40; // 8bit
 
-    //================ Payload (40bit) ================//
-    frame |= ((uint64_t)(payload->speed      & 0xFF))  << 32;//8
-    frame |= ((uint64_t)(payload->x          & 0x3FF)) << 22;//10
-    frame |= ((uint64_t)(payload->y          & 0x7FF)) << 11;//11
-    frame |= ((uint64_t)(payload->heading    & 0x1FF)) << 2;//9
-    frame |= ((uint64_t)(payload->turnSignal & 0x03));//2
-
-    uint8_t data[8];
-
-    for(int i=0;i<8;i++)
+    //================ Payload 패킹 (40bit) ================//
+    // msg_id 기반 분기하여 전역 상태 변수에서 다이렉트로 값을 읽어옴
+    switch(header->msg_id)
     {
-        data[7-i] = frame & 0xFF;
-        frame >>= 8;
+    case 0x0:     // Vehicle Status (Ego)
+        frame |= ((uint64_t)(ego.speed      & 0xFF))  << 32;
+        frame |= ((uint64_t)(ego.x          & 0x3FF)) << 22;
+        frame |= ((uint64_t)(ego.y          & 0x7FF)) << 11;
+        frame |= ((uint64_t)(ego.heading    & 0x1FF)) << 2;
+        break;
+
+    case 0x4:     // Crosswalk Zone (Candidate)
+        frame |= ((uint64_t)(candidate.type & 0xFF))  << 32;
+        frame |= ((uint64_t)(candidate.cz_x & 0x3FF)) << 22;
+        frame |= ((uint64_t)(candidate.cz_y & 0x7FF)) << 11;
+        break;
+
+    case 0x5:     // Opposite Vehicle (Candidate)
+        frame |= ((uint64_t)(candidate.type  & 0xFF))  << 32;
+        frame |= ((uint64_t)(candidate.speed & 0xFF))  << 24;
+        frame |= ((uint64_t)(candidate.x     & 0x3FF)) << 14;
+        frame |= ((uint64_t)(candidate.y     & 0x7FF)) << 3;
+        break;
+
+    case 0x6:     // Traffic Light
+        frame |= ((uint64_t)(trafficLight.color     & 0x03)) << 30;
+        frame |= ((uint64_t)(trafficLight.time_left & 0x0F)) << 26;
+        frame |= ((uint64_t)(trafficLight.cz_x      & 0x3FF)) << 16;
+        frame |= ((uint64_t)(trafficLight.cz_y      & 0x7FF)) << 5;
+        break;
     }
 
-    while(!(CAN1->TSR & CAN_TSR_TME0));
+    Uart3_Printf("TX FRAME=%08lX %08lX\r\n", (uint32_t)(frame >> 32), (uint32_t)frame);
 
-    CAN1->sTxMailBox[0].TIR = (can_id << 21);
-    CAN1->sTxMailBox[0].TDTR = 8;
-
-    CAN1->sTxMailBox[0].TDLR =
-          data[0]
-        | (data[1] << 8)
-        | (data[2] << 16)
-        | (data[3] << 24);
-
-    CAN1->sTxMailBox[0].TDHR =
-          data[4]
-        | (data[5] << 8)
-        | (data[6] << 16)
-        | (data[7] << 24);
-
-    CAN1->sTxMailBox[0].TIR |= CAN_TI0R_TXRQ;
+    // 하드웨어 레지스터 제어
+    CAN1->sTxMailBox[0].TDTR = 8; // DLC 8바이트
+    CAN1->sTxMailBox[0].TDLR = (uint32_t)frame;
+    CAN1->sTxMailBox[0].TDHR = (uint32_t)(frame >> 32);
+    CAN1->sTxMailBox[0].TIR  = (can_id << 21) | CAN_TI0R_TXRQ;
 
     while(!(CAN1->TSR & CAN_TSR_RQCP0));
-
     CAN1->TSR = CAN_TSR_RQCP0;
 }
 
-uint8_t CAN_Rx(uint16_t *can_id,
-               CAN_Header_t *header,
-               CAN_Payload_t *payload)
+uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header)
 {
     if((CAN1->RF0R & CAN_RF0R_FMP0) == 0)
+    {
         return 0;
+    }
 
     *can_id = (CAN1->sFIFOMailBox[0].RIR >> 21) & 0x7FF;
 
     uint32_t low  = CAN1->sFIFOMailBox[0].RDLR;
     uint32_t high = CAN1->sFIFOMailBox[0].RDHR;
+
     CAN1->RF0R |= CAN_RF0R_RFOM0;
 
-    uint64_t frame =
-        ((uint64_t)high << 32) | low;
+    uint64_t frame = ((uint64_t)high << 32) | low;
 
-    //================ Header =================//
+    //================ Header 복원 =================//
     header->msg_id     = (frame >> 60) & 0x0F;
-    header->timestamp  = (frame >> 48) & 0xFFF;
+    header->timestamp  = (frame >> 48) & 0x0FFF;
     header->updateMask = (frame >> 40) & 0xFF;
 
-    //================ Payload ================//
-    payload->speed      = (frame >> 32) & 0xFF;
-    payload->x          = (frame >> 22) & 0x3FF;
-    payload->y          = (frame >> 11) & 0x7FF;
-    payload->heading    = (frame >> 2)  & 0x1FF;
-    payload->turnSignal = frame & 0x03;
+    Uart3_Printf("HIGH=%08lX LOW=%08lX\r\n", high, low);
 
+    //================ Payload 복원 및 전역 상태 갱신 =================//
+    switch(header->msg_id)
+    {
+    case 0x0:     // Vehicle Status (Ego)
+        ego.speed     = (frame >> 32) & 0xFF;
+        ego.x         = (frame >> 22) & 0x3FF;
+        ego.y         = (frame >> 11) & 0x7FF;
+        ego.heading   = (frame >> 2)  & 0x1FF;
+        ego.timestamp = header->timestamp;
+        break;
+
+    case 0x4:     // Crosswalk Zone (Candidate)
+        candidate.type = (frame >> 32) & 0xFF;
+        candidate.cz_x = (frame >> 22) & 0x3FF;
+        candidate.cz_y = (frame >> 11) & 0x7FF;
+        candidate.timestamp_ms = header->timestamp;
+        break;
+
+    case 0x5:     // Opposite Vehicle (Candidate)
+        candidate.type  = (frame >> 32) & 0xFF;
+        candidate.speed = (frame >> 24) & 0xFF;
+        candidate.x     = (frame >> 14) & 0x3FF;
+        candidate.y     = (frame >> 3)  & 0x7FF;
+        candidate.timestamp_ms = header->timestamp;
+        break;
+
+    case 0x6:     // Traffic Light
+        trafficLight.color     = (frame >> 30) & 0x03;
+        trafficLight.time_left = (frame >> 26) & 0x0F;
+        trafficLight.cz_x      = (frame >> 16) & 0x3FF;
+        trafficLight.cz_y      = (frame >> 5)  & 0x7FF;
+        break;
+
+    default:
+        return 0;
+    }
     return 1;
 }
 
@@ -225,14 +270,11 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
+  /** Configure the main internal regulator output voltage */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+  /** Initializes the RCC Oscillators */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -246,8 +288,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
+  /** Initializes the CPU, AHB and APB buses clocks */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -261,17 +302,8 @@ void SystemClock_Config(void)
   }
 }
 
-
 static void MX_USART3_UART_Init(void)
 {
-
-  /* USER CODE BEGIN USART3_Init 0 */
-
-  /* USER CODE END USART3_Init 0 */
-
-  /* USER CODE BEGIN USART3_Init 1 */
-
-  /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
   huart3.Init.BaudRate = 115200;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
@@ -284,46 +316,36 @@ static void MX_USART3_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART3_Init 2 */
-
-  /* USER CODE END USART3_Init 2 */
-
 }
 
-/* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END 5 */
 }
 
 void vTask_CAN_Tx(void *argument)
 {
-	CAN_Header_t header =
-	{
-	    .msg_id = rand()%0xF,
-	    .timestamp = rand()%0xFFF,
-	    .updateMask = rand()%0x1F
-	};
+    // 테스트용 헤더 설정 (Opposite Vehicle)
+    CAN_Header_t header =
+    {
+        .msg_id = 0x5,
+        .timestamp = 0,
+        .updateMask = 0
+    };
 
-	CAN_Payload_t payload =
-	{
-	    .speed = rand()%0xFF,
-	    .x = rand()%0x3FF,
-	    .y = rand()%0x7FF,
-	    .heading = rand()%0x1FF,
-	    .turnSignal = 1
-	};
+    // 송신할 데이터를 전역 변수에 다이렉트로 할당
+    candidate.type = 0x01;
+    candidate.speed = 60;
+    candidate.x = 120;
+    candidate.y = 350;
+
     while(1)
     {
-        CAN_Tx(0x200,&header,&payload);
-
-        Uart3_Printf("CAN TX\r\n");
+        // 전역 변수에서 데이터를 읽어오므로 payload 포인터 생략
+        CAN_Tx(0x200, &header);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -333,18 +355,19 @@ void vTask_CAN_Rx(void *argument)
 {
     while(1){ulTaskNotifyTake(pdTRUE, portMAX_DELAY);}
 }
+
 void UART3_Send_Byte(char ch){
-  if (ch=='\n'){                        // new line인 경우  '\n'을 추가전송
+  if (ch=='\n'){
       USART3->DR = 0x0d;
       while (((USART3->SR >> 7)&0x1)==0);
   }
   USART3->DR = ch;
-  while (((USART3->SR >> 7)&0x1)==0);    // wait TXE
+  while (((USART3->SR >> 7)&0x1)==0);
 }
 
 void UART3_Send_String(char* p){
     while (*p){
-        UART3_Send_Byte(*p++);            // 널문자 전까지 출력
+        UART3_Send_Byte(*p++);
     }
 }
 
@@ -361,27 +384,14 @@ void Uart3_Printf(char *fmt,...)
 
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
   }
-  /* USER CODE END Error_Handler_Debug */
 }
+
 #ifdef USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
