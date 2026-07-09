@@ -101,19 +101,19 @@ static bool poll_mock(CanHandler* handler)
     sleep_ms(20);
 
     EgoVehicle ego;
-    if (handler->has_last_ego) {
-        ego = handler->last_ego;
-    } else {
-        memset(&ego, 0, sizeof(ego));
-        ego.x = 150;
-        ego.y = 40;
-        ego.speed = 30;
-        ego.heading = 0;
-        ego.turn_signal = 0;
-    }
+    memset(&ego, 0, sizeof(ego));
 
-    ego.x = (uint16_t)(150 + (handler->mock_tick % 60));
-    ego.y = (uint16_t)(40 + (handler->mock_tick % 80));
+    /*
+     * CAN_MOCK=1 is used to exercise the Linux decision pipeline without
+     * real sensor/CAN input. Keep the mock ego vehicle inside lanelet L4
+     * (straight_right, northbound) and hold the right turn signal on so the
+     * normal CanRxTask logic enters right_turn mode.
+     */
+    ego.x = (uint16_t)(205 + (handler->mock_tick % 20));
+    ego.y = (uint16_t)(70 + (handler->mock_tick % 35));
+    ego.speed = 30;
+    ego.heading = 0;
+    ego.turn_signal = TURN_SIGNAL_RIGHT;
     ego.timestamp = handler->mock_tick++;
 
     handler->last_ego = ego;
