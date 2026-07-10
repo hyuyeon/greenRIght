@@ -41,7 +41,7 @@ static void on_message(struct mosquitto* mosq, void* userdata, const struct mosq
                 handler->callbacks.on_vehicle(&vehicle, handler->callbacks.user_data);
             }
         }
-    } else if (strncmp(msg->topic, "v2x/trafficlight/", 18) == 0) {
+    } else if (strncmp(msg->topic, "v2x/trafficlight/", strlen("v2x/trafficlight/")) == 0) {
         uint8_t tl_id = parse_traffic_light_topic_id(msg->topic);
         TrafficLight traffic_light;
         if (tl_id != 0xFF && traffic_light_from_json_string(payload, &traffic_light)) {

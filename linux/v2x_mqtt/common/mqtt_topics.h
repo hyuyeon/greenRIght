@@ -11,7 +11,7 @@
  *       연결이 끊기면 다른 차량들이 즉시 감지(Fail-Safe, 통신 두절 처리)
  *
  * [신호등 정보 (추후 ESP32/V2I 쪽에서 publish 예정)]
- *  - v2x/trafficlight/<linked_tl_id>    (payload: {"color":"red|yellow|green","time_left":N}, retain=true)
+ *  - v2x/trafficlight/<linked_tl_id>/status    (payload: {"color":"red|yellow|green","time_left":N}, retain=true)
  *    -> 신호등 ID는 topic의 <linked_tl_id>로 구분한다.
  */
 
@@ -19,8 +19,8 @@
 #define TOPIC_VEHICLE_STATUS_FMT      "v2x/vehicle/%u/status"
 #define TOPIC_VEHICLE_STATUS_WILDCARD "v2x/vehicle/+/status"
 
-#define TOPIC_TRAFFICLIGHT_FMT        "v2x/trafficlight/%u"
-#define TOPIC_TRAFFICLIGHT_WILDCARD   "v2x/trafficlight/+"
+#define TOPIC_TRAFFICLIGHT_FMT        "v2x/trafficlight/%u/status"
+#define TOPIC_TRAFFICLIGHT_WILDCARD   "v2x/trafficlight/+/status"
 
 /* vehicle_id constants are defined in types.h. */
 
