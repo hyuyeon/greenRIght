@@ -8,6 +8,7 @@
 
 #define CANDIDATE_TX_PERIOD_MS 50
 #define CANDIDATE_STATUS_TX_REAL_PERIOD_MS 1000
+#define TRAFFIC_LIGHT_TX_REAL_PERIOD_MS 1000
 #define CANDIDATE_ID_NONE VEHICLE_ID_NONE
 #define TYPE_MASK_NONE 0
 #define TYPE_MASK_RIGHT_VS_STRAIGHT 1
@@ -206,21 +207,10 @@ static bool select_farthest_self_conflict_zone_center(
     return true;
 }
 
-static uint8_t select_candidate_traffic_light_id(const VehicleInfo* self, const CandidateSelection* vehicle_selection)
+static uint8_t select_candidate_traffic_light_id(const VehicleInfo* self)
 {
     if (!self) return INVALID_ID;
-
-    const char* linked_tl_id = self->linked_tl_id;
-    if (
-        is_turn_state(self, "right_turn") &&
-        vehicle_selection &&
-        is_turn_state(&vehicle_selection->vehicle, "straight") &&
-        vehicle_selection->vehicle.linked_tl_id[0] != '\0'
-    ) {
-        linked_tl_id = vehicle_selection->vehicle.linked_tl_id;
-    }
-
-    return map_service_parse_traffic_light_num(linked_tl_id);
+    return map_service_parse_traffic_light_num(self->linked_tl_id);
 }
 
 static void send_candidate_traffic_light(AppContext* context, const VehicleInfo* self, const CandidateSelection* vehicle_selection)
@@ -236,7 +226,8 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
     uint16_t cz_y = 0;
     select_farthest_self_conflict_zone_center(context, self, &cz_x, &cz_y);
 
-    uint8_t tl_id = select_candidate_traffic_light_id(self, vehicle_selection);
+    (void)vehicle_selection;
+    uint8_t tl_id = select_candidate_traffic_light_id(self);
     traffic_light_manager_select_candidate(&context->traffic_lights, tl_id);
 
     TrafficLight traffic_light;
@@ -256,11 +247,14 @@ static void* can_tx_thread_main(void* arg)
     bool last_had_candidate = false;
     uint8_t last_intro_vehicle_id = CANDIDATE_ID_NONE;
     uint32_t candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
+    uint32_t traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
 
     while (atomic_load(&context->running)) {
         bool active = atomic_load(&context->candidate_vehicle_tx_enabled);
         bool status_due = !context->can_tx_real ||
             candidate_status_elapsed_ms >= CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
+        bool traffic_light_due = !context->can_tx_real ||
+            traffic_light_elapsed_ms >= TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
         VehicleInfo self;
         CandidateSelection selection;
         memset(&self, 0, sizeof(self));
@@ -279,9 +273,13 @@ static void* can_tx_thread_main(void* arg)
                 candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
             }
 
-            send_candidate_traffic_light(context, has_self ? &self : NULL, NULL);
+            if (traffic_light_due) {
+                send_candidate_traffic_light(context, has_self ? &self : NULL, NULL);
+                traffic_light_elapsed_ms = 0;
+            }
             sleep_ms(CANDIDATE_TX_PERIOD_MS);
             candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
+            traffic_light_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
             continue;
         }
 
@@ -291,7 +289,9 @@ static void* can_tx_thread_main(void* arg)
             last_had_candidate = false;
             last_intro_vehicle_id = CANDIDATE_ID_NONE;
             candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
+            traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
             status_due = true;
+            traffic_light_due = true;
         }
 
         if (has_self) {
@@ -325,9 +325,13 @@ static void* can_tx_thread_main(void* arg)
             last_had_candidate = false;
         }
 
-        send_candidate_traffic_light(context, has_self ? &self : NULL, has_candidate ? &selection : NULL);
+        if (traffic_light_due) {
+            send_candidate_traffic_light(context, has_self ? &self : NULL, has_candidate ? &selection : NULL);
+            traffic_light_elapsed_ms = 0;
+        }
         sleep_ms(CANDIDATE_TX_PERIOD_MS);
         candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
+        traffic_light_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
     }
     return NULL;
 }
