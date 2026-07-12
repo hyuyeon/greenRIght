@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include <mosquitto.h>
 #include "types.h"
 
@@ -20,6 +21,7 @@ typedef struct {
     uint8_t vehicle_id;
     char status_topic[64];
     MqttHandlerCallbacks callbacks;
+    atomic_bool connected;
     bool initialized;
 } MqttHandler;
 
@@ -32,5 +34,6 @@ bool mqtt_handler_init(
 );
 void mqtt_handler_cleanup(MqttHandler* handler);
 bool mqtt_handler_publish_vehicle_info(MqttHandler* handler, const VehicleInfo* vehicle);
+bool mqtt_handler_is_connected(const MqttHandler* handler);
 
 #endif

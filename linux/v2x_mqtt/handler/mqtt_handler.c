@@ -1,5 +1,6 @@
 #include "mqtt_handler.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,13 +62,29 @@ static void on_connect(struct mosquitto* mosq, void* userdata, int rc)
 
     if (rc != 0) {
         fprintf(stderr, "[MQTT] connect failed: %s\n", mosquitto_connack_string(rc));
+        atomic_store(&handler->connected, false);
         return;
     }
 
+    atomic_store(&handler->connected, true);
     printf("[MQTT] connected vehicle_id=%u\n", handler->vehicle_id);
     mosquitto_subscribe(mosq, NULL, TOPIC_VEHICLE_STATUS_WILDCARD, 0);
     mosquitto_subscribe(mosq, NULL, TOPIC_TRAFFICLIGHT_WILDCARD, 0);
     printf("[MQTT] subscribed: %s, %s\n", TOPIC_VEHICLE_STATUS_WILDCARD, TOPIC_TRAFFICLIGHT_WILDCARD);
+}
+
+static void on_disconnect(struct mosquitto* mosq, void* userdata, int rc)
+{
+    (void)mosq;
+    MqttHandler* handler = (MqttHandler*)userdata;
+    if (!handler) return;
+
+    atomic_store(&handler->connected, false);
+    if (rc != 0) {
+        fprintf(stderr, "[MQTT] disconnected unexpectedly rc=%d\n", rc);
+    } else {
+        printf("[MQTT] disconnected\n");
+    }
 }
 
 bool mqtt_handler_init(
@@ -80,6 +97,7 @@ bool mqtt_handler_init(
 {
     if (!handler || !host) return false;
     memset(handler, 0, sizeof(*handler));
+    atomic_init(&handler->connected, false);
     handler->vehicle_id = vehicle_id;
     if (callbacks) {
         handler->callbacks = *callbacks;
@@ -100,6 +118,7 @@ bool mqtt_handler_init(
     snprintf(handler->status_topic, sizeof(handler->status_topic), TOPIC_VEHICLE_STATUS_FMT, (unsigned)vehicle_id);
 
     mosquitto_connect_callback_set(handler->mosq, on_connect);
+    mosquitto_disconnect_callback_set(handler->mosq, on_disconnect);
     mosquitto_message_callback_set(handler->mosq, on_message);
     /*
      * [기술력] LWT (Last Will and Testament) 설정
@@ -138,6 +157,7 @@ bool mqtt_handler_init(
 void mqtt_handler_cleanup(MqttHandler* handler)
 {
     if (!handler || !handler->initialized) return;
+    atomic_store(&handler->connected, false);
     mosquitto_loop_stop(handler->mosq, true);
     mosquitto_disconnect(handler->mosq);
     mosquitto_destroy(handler->mosq);
@@ -164,4 +184,10 @@ bool mqtt_handler_publish_vehicle_info(MqttHandler* handler, const VehicleInfo* 
     );
     free(json);
     return rc == MOSQ_ERR_SUCCESS;
+}
+
+bool mqtt_handler_is_connected(const MqttHandler* handler)
+{
+    if (!handler || !handler->initialized) return false;
+    return atomic_load(&handler->connected);
 }

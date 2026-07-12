@@ -21,6 +21,9 @@
 #define CAN_MSG_ID_FILTERED_STATUS  0x5
 #define CAN_MSG_ID_TRAFFIC_LIGHT    0x6
 
+#define TYPE_MASK_V2X_UNAVAILABLE 0x80
+#define TL_TYPE_MASK_MQTT_UNAVAILABLE 0x80
+
 #define UPD_BIT_SPEED       (1u << 0)
 #define UPD_BIT_X           (1u << 1)
 #define UPD_BIT_Y           (1u << 2)
@@ -335,6 +338,14 @@ bool can_handler_send_no_candidate_vehicle(CanHandler* handler)
     return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
 }
 
+bool can_handler_send_candidate_vehicle_unavailable(CanHandler* handler)
+{
+    uint8_t update_mask = 0x01;
+    uint64_t payload = 0;
+    payload |= ((uint64_t)TYPE_MASK_V2X_UNAVAILABLE) << 32;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+}
+
 bool can_handler_send_traffic_light(
     CanHandler* handler,
     uint8_t tl_type_mask,
@@ -363,6 +374,16 @@ bool can_handler_send_traffic_light(
 bool can_handler_send_no_traffic_light(CanHandler* handler, uint8_t maneuver)
 {
     uint64_t payload = 0;
+    payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
+
+    uint8_t update_mask = 0x21;
+    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
+}
+
+bool can_handler_send_traffic_light_unavailable(CanHandler* handler, uint8_t maneuver)
+{
+    uint64_t payload = 0;
+    payload |= ((uint64_t)TL_TYPE_MASK_MQTT_UNAVAILABLE) << 32;
     payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
     uint8_t update_mask = 0x21;

@@ -217,7 +217,16 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
 {
     uint8_t maneuver = maneuver_code_from_self(self);
 
-    if (!context || !self) {
+    if (!context) {
+        return;
+    }
+
+    if (!mqtt_handler_is_connected(&context->mqtt)) {
+        can_handler_send_traffic_light_unavailable(&context->can, maneuver);
+        return;
+    }
+
+    if (!self) {
         can_handler_send_no_traffic_light(&context->can, maneuver);
         return;
     }
@@ -294,27 +303,45 @@ static void* can_tx_thread_main(void* arg)
             traffic_light_due = true;
         }
 
-        if (has_self) {
-            has_candidate = select_candidate_vehicle(context, &self, &selection);
-        }
+        bool mqtt_connected = mqtt_handler_is_connected(&context->mqtt);
 
-        if (has_candidate) {
-            other_vehicle_manager_set_candidate(&context->others, &selection.vehicle);
-            if (selection.vehicle.vehicle_id != last_intro_vehicle_id) {
-                can_handler_send_candidate_vehicle_intro(
-                    &context->can,
-                    selection.type_mask,
-                    selection.conflict_zone_center_x,
-                    selection.conflict_zone_center_y
-                );
-                last_intro_vehicle_id = selection.vehicle.vehicle_id;
-                status_due = true;
-            }
-            if (status_due) {
-                can_handler_send_candidate_vehicle_status(&context->can, selection.type_mask, &selection.vehicle);
+        if (!mqtt_connected) {
+            other_vehicle_manager_set_candidate(&context->others, NULL);
+            if (status_due || last_had_candidate) {
+                can_handler_send_candidate_vehicle_unavailable(&context->can);
                 candidate_status_elapsed_ms = 0;
             }
-            last_had_candidate = true;
+            last_intro_vehicle_id = CANDIDATE_ID_NONE;
+            last_had_candidate = false;
+        } else if (has_self) {
+            has_candidate = select_candidate_vehicle(context, &self, &selection);
+
+            if (has_candidate) {
+                other_vehicle_manager_set_candidate(&context->others, &selection.vehicle);
+                if (selection.vehicle.vehicle_id != last_intro_vehicle_id) {
+                    can_handler_send_candidate_vehicle_intro(
+                        &context->can,
+                        selection.type_mask,
+                        selection.conflict_zone_center_x,
+                        selection.conflict_zone_center_y
+                    );
+                    last_intro_vehicle_id = selection.vehicle.vehicle_id;
+                    status_due = true;
+                }
+                if (status_due) {
+                    can_handler_send_candidate_vehicle_status(&context->can, selection.type_mask, &selection.vehicle);
+                    candidate_status_elapsed_ms = 0;
+                }
+                last_had_candidate = true;
+            } else {
+                other_vehicle_manager_set_candidate(&context->others, NULL);
+                if (status_due || last_had_candidate) {
+                    can_handler_send_no_candidate_vehicle(&context->can);
+                    candidate_status_elapsed_ms = 0;
+                }
+                last_intro_vehicle_id = CANDIDATE_ID_NONE;
+                last_had_candidate = false;
+            }
         } else {
             other_vehicle_manager_set_candidate(&context->others, NULL);
             if (status_due || last_had_candidate) {

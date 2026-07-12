@@ -34,6 +34,7 @@ bool can_handler_poll(CanHandler* handler, int timeout_ms);
 bool can_handler_send_candidate_vehicle_intro(CanHandler* handler, uint8_t type_mask, uint16_t cz_x, uint16_t cz_y);
 bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type_mask, const VehicleInfo* candidate);
 bool can_handler_send_no_candidate_vehicle(CanHandler* handler);
+bool can_handler_send_candidate_vehicle_unavailable(CanHandler* handler);
 bool can_handler_send_traffic_light(
     CanHandler* handler,
     uint8_t tl_type_mask,
@@ -43,5 +44,6 @@ bool can_handler_send_traffic_light(
     uint8_t maneuver
 );
 bool can_handler_send_no_traffic_light(CanHandler* handler, uint8_t maneuver);
+bool can_handler_send_traffic_light_unavailable(CanHandler* handler, uint8_t maneuver);
 
 #endif
