@@ -1,0 +1,8 @@
+../Core/Src/display_tasks.c:15:13:Display_LockLcd	8	static
+../Core/Src/display_tasks.c:22:13:Display_UnlockLcd	8	static
+../Core/Src/display_tasks.c:28:22:Dicision_ToTurnDirection	16	static
+../Core/Src/display_tasks.c:40:16:Dicision_ToWarningMask	24	static
+../Core/Src/display_tasks.c:76:6:TlDisplayTask	32	static
+../Core/Src/display_tasks.c:97:6:DicisionDisplayTask	128	static
+../Core/Src/display_tasks.c:140:6:TrafficLight_Update	32	static
+../Core/Src/display_tasks.c:156:6:DisplayTasks_Init	16	static

@@ -1,0 +1,5 @@
+../Core/Src/debug_uart.c:8:13:Uart3_Vprintf	272	static
+../Core/Src/debug_uart.c:19:6:UART3_Send_Byte	16	static
+../Core/Src/debug_uart.c:30:6:UART3_Send_String	16	static
+../Core/Src/debug_uart.c:43:6:Uart3_Logf	28	static
+../Core/Src/debug_uart.c:55:6:Uart3_Printf	16	static
