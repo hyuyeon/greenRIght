@@ -1,0 +1,10 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
+../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	2
+../Core/Src/can_rx_task.c:27:6:CAN_Config	3
+../Core/Src/can_rx_task.c:71:6:CAN_Tx	6
+../Core/Src/can_rx_task.c:122:16:CAN_Rx	2
+../Core/Src/can_rx_task.c:163:13:CanRx_DebugPrintMsg4	1
+../Core/Src/can_rx_task.c:181:13:CanRx_HandleFrame	18
+../Core/Src/can_rx_task.c:304:13:CanRxTask	2
+../Core/Src/can_rx_task.c:325:6:CanRxTask_Init	1
+../Core/Src/can_rx_task.c:330:6:CAN1_RX0_IRQHandler	3

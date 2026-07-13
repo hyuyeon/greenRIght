@@ -1,0 +1,5 @@
+../Core/Src/display_tasks.c:47:6:TlDisplayTask	1
+../Core/Src/display_tasks.c:61:6:DicisionDisplayTask	8
+../Core/Src/display_tasks.c:74:6:TrafficLight_Update	3
+../Core/Src/display_tasks.c:88:6:Dicision_Post	1
+../Core/Src/display_tasks.c:94:6:DisplayTasks_Init	1

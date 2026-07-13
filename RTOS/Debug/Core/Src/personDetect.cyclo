@@ -1,0 +1,8 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
+../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	2
+../Core/Src/personDetect.c:50:13:LED_Init	1
+../Core/Src/personDetect.c:65:6:UART4_Init	1
+../Core/Src/personDetect.c:92:6:UART4_IRQHandler	17
+../Core/Src/personDetect.c:172:6:PersonFlag_Init	1
+../Core/Src/personDetect.c:177:6:PersonFlag_DebugPrint	7
+../Core/Src/personDetect.c:197:6:PersonFlag_GetDebugSnapshot	2

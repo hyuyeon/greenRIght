@@ -1,0 +1,6 @@
+../Core/Src/ttc.c:24:8:get_distance	56	static
+../Core/Src/ttc.c:33:15:speed_m_per_min_to_m_per_sec	24	static
+../Core/Src/ttc.c:44:15:dist_cm_to_m	16	static
+../Core/Src/ttc.c:72:15:compute_arc_distance_by_heading	176	static
+../Core/Src/ttc.c:129:8:calculate_Ego_TTC	96	static
+../Core/Src/ttc.c:152:8:calculate_Cand_TTC	64	static
