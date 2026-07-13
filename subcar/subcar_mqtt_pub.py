@@ -12,7 +12,7 @@ from pathlib import Path
 
 TOPIC_VEHICLE_STATUS_FMT = "v2x/vehicle/{vehicle_id}/status"
 MAX_CONFLICT_ZONES = 4
-EXCLUDED_CONFLICT_ZONE_IDS = {"cz7"}
+PASSED_CONFLICT_ZONE_THRESHOLD_CM = 10.0
 
 BNO055_CHIP_ID_REG = 0x00
 BNO055_PAGE_ID_REG = 0x07
@@ -98,11 +98,17 @@ class Lanelet:
     movement_conflicts: dict = field(default_factory=dict)
 
 
+@dataclass
+class VehicleMapState:
+    conflict_zone_ids: list = field(default_factory=list)
+
+
 class IntersectionMap:
     def __init__(self, xml_path):
         self.xml_path = Path(xml_path)
         self.lanelets = []
         self.intersection_center = []
+        self.conflict_zones = {}
         self.load()
 
     def load(self):
@@ -116,10 +122,12 @@ class IntersectionMap:
             )
 
         for area in root.findall("./areas/area"):
-            if area.attrib.get("type") == "intersection_center":
-                self.intersection_center = [
-                    points[ref.attrib["id"]] for ref in area.findall("point_ref")
-                ]
+            area_points = [points[ref.attrib["id"]] for ref in area.findall("point_ref")]
+            area_type = area.attrib.get("type")
+            if area_type == "intersection_center":
+                self.intersection_center = area_points
+            elif area_type == "conflict_zone":
+                self.conflict_zones[area.attrib["id"]] = area_points
 
         lane_by_id = {}
         for node in root.findall("./lanelets/lanelet"):
@@ -180,6 +188,15 @@ class IntersectionMap:
                 return lane, False
 
         return None, False
+
+    def conflict_zone_center(self, conflict_zone_id):
+        polygon = self.conflict_zones.get(conflict_zone_id)
+        if not polygon:
+            return None
+
+        center_x = sum(point[0] for point in polygon) / len(polygon)
+        center_y = sum(point[1] for point in polygon) / len(polygon)
+        return center_x, center_y
 
 
 class BNO055:
@@ -272,20 +289,57 @@ def conflict_movement(turn_state):
     return "straight"
 
 
-def build_payload(vehicle_id, pos, speed_mps, heading_x100, lane, in_center, fixed_turn_state):
+def conflict_zone_is_behind_vehicle(intersection_map, conflict_zone_id, x_cm, y_cm, heading_deg):
+    center = intersection_map.conflict_zone_center(conflict_zone_id)
+    if center is None:
+        return False
+
+    heading_rad = math.radians(heading_deg)
+    dir_x = math.sin(heading_rad)
+    dir_y = math.cos(heading_rad)
+    to_cz_x = center[0] - x_cm
+    to_cz_y = center[1] - y_cm
+    projection = to_cz_x * dir_x + to_cz_y * dir_y
+    return projection < -PASSED_CONFLICT_ZONE_THRESHOLD_CM
+
+
+def filter_existing_conflict_zones_by_projection(intersection_map, previous_conflict_zone_ids, x_cm, y_cm, heading_deg):
+    kept = []
+    for zone_id in previous_conflict_zone_ids:
+        if not conflict_zone_is_behind_vehicle(intersection_map, zone_id, x_cm, y_cm, heading_deg):
+            kept.append(zone_id)
+    return kept[:MAX_CONFLICT_ZONES]
+
+
+def conflict_zones_from_lane(lane, turn_state):
+    if not lane:
+        return []
+
+    movement = conflict_movement(turn_state)
+    return list(lane.movement_conflicts.get(movement, []))[:MAX_CONFLICT_ZONES]
+
+
+def update_conflict_zones(intersection_map, vehicle_state, lane, turn_state, x_cm, y_cm, heading_deg):
+    if lane:
+        vehicle_state.conflict_zone_ids = conflict_zones_from_lane(lane, turn_state)
+        return
+
+    vehicle_state.conflict_zone_ids = filter_existing_conflict_zones_by_projection(
+        intersection_map,
+        vehicle_state.conflict_zone_ids,
+        x_cm,
+        y_cm,
+        heading_deg,
+    )
+
+
+def build_payload(vehicle_id, pos, speed_mps, heading_x100, lane, turn_state, vehicle_state):
     lanelet_id = ""
     linked_tl_id = ""
-    conflict_zone_ids = []
-    turn_state = "straight"
 
     if lane:
         lanelet_id = lane.lanelet_id
         linked_tl_id = lane.traffic_light_id
-        conflict_zone_ids = lane.movement_conflicts.get("straight") or lane.conflict_zone_ids
-    conflict_zone_ids = [
-        zone_id for zone_id in conflict_zone_ids
-        if zone_id not in EXCLUDED_CONFLICT_ZONE_IDS
-    ][:MAX_CONFLICT_ZONES]
 
     return {
         "vehicle_id": vehicle_id,
@@ -295,8 +349,8 @@ def build_payload(vehicle_id, pos, speed_mps, heading_x100, lane, in_center, fix
         "heading": max(0, min(65535, int(round(heading_x100 / 100.0)))),
         "lanelet_id": lanelet_id,
         "turn_state": turn_state,
-        "conflict_zone_ids": conflict_zone_ids,
-        "conflict_zone_count": len(conflict_zone_ids),
+        "conflict_zone_ids": vehicle_state.conflict_zone_ids,
+        "conflict_zone_count": len(vehicle_state.conflict_zone_ids),
         "linked_tl_id": linked_tl_id,
         "timestamp_ms": now_ms(),
     }
@@ -373,7 +427,7 @@ class KeyboardDriveController:
 
 def parse_args():
     base_dir = Path(__file__).resolve().parents[1]
-    default_map = base_dir / "map" / "map.xml"
+    default_map = base_dir / "linux" / "v2x_mqtt" / "map" / "intersection_lanelet_v1.xml"
 
     parser = argparse.ArgumentParser(description="SubCar sensor + MQTT publisher")
     parser.add_argument("--vehicle-id", type=int, default=2)
@@ -394,7 +448,7 @@ def parse_args():
     parser.add_argument(
         "--turn-state",
         choices=["straight", "right_turn", "left_turn", "unprotected_left"],
-        default="",
+        default="straight",
     )
     return parser.parse_args()
 
@@ -406,6 +460,7 @@ def main():
 
     intersection_map = IntersectionMap(args.map)
     pos = Position(args.start_x_cm, args.start_y_cm)
+    vehicle_state = VehicleMapState()
     client, topic = make_mqtt_client(args.vehicle_id, args.mqtt_host, args.mqtt_port, 30)
 
     running = True
@@ -457,14 +512,24 @@ def main():
 
             pos.update(current_speed_mps, last_heading_x100)
             lane, in_center = intersection_map.query(pos.x_cm, pos.y_cm)
+            heading_deg = last_heading_x100 / 100.0
+            update_conflict_zones(
+                intersection_map,
+                vehicle_state,
+                lane,
+                args.turn_state,
+                pos.x_cm,
+                pos.y_cm,
+                heading_deg,
+            )
             payload = build_payload(
                 args.vehicle_id,
                 pos,
                 current_speed_mps,
                 last_heading_x100,
                 lane,
-                in_center,
                 args.turn_state,
+                vehicle_state,
             )
 
             client.publish(topic, json.dumps(payload, separators=(",", ":")), qos=0, retain=False)
