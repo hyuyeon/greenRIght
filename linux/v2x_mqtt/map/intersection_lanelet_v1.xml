@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map id="intersection_lanelet_v1"
-     width="300"
-     height="400"
+     width="400"
+     height="500"
      unit="cm"
      origin="bottom_left"
      coordinate_system="local_2d">
 
   <metadata>
     <description>Lanelet-only first version of the demo intersection map.</description>
-    <note>Blue sketch boundary is represented by map width/height. Lane width is fixed to 45 cm.</note>
+    <note>Blue sketch boundary is represented by map width/height. Lane width is fixed to 30 cm.</note>
     <heading_constants convention="north_zero_clockwise_deg">
       <heading id="north" deg="0" />
       <heading id="east" deg="90" />
@@ -18,110 +18,110 @@
   </metadata>
 
   <points>
-    <!-- Grid points: x = 0, 60, 105, 150, 195, 240, 300 / y = 0, 110, 155, 200, 245, 290, 400 -->
+    <!-- Grid points: x = 0, 140, 170, 200, 230, 260, 400 / y = 0, 190, 220, 250, 280, 310, 500 -->
     <point id="p_000_000" x="0" y="0" />
-    <point id="p_060_000" x="60" y="0" />
-    <point id="p_105_000" x="105" y="0" />
-    <point id="p_150_000" x="150" y="0" />
-    <point id="p_195_000" x="195" y="0" />
-    <point id="p_240_000" x="240" y="0" />
-    <point id="p_300_000" x="300" y="0" />
+    <point id="p_060_000" x="140" y="0" />
+    <point id="p_105_000" x="170" y="0" />
+    <point id="p_150_000" x="200" y="0" />
+    <point id="p_195_000" x="230" y="0" />
+    <point id="p_240_000" x="260" y="0" />
+    <point id="p_300_000" x="400" y="0" />
 
-    <point id="p_000_110" x="0" y="110" />
-    <point id="p_060_110" x="60" y="110" />
-    <point id="p_105_110" x="105" y="110" />
-    <point id="p_150_110" x="150" y="110" />
-    <point id="p_195_110" x="195" y="110" />
-    <point id="p_240_110" x="240" y="110" />
-    <point id="p_300_110" x="300" y="110" />
+    <point id="p_000_110" x="0" y="190" />
+    <point id="p_060_110" x="140" y="190" />
+    <point id="p_105_110" x="170" y="190" />
+    <point id="p_150_110" x="200" y="190" />
+    <point id="p_195_110" x="230" y="190" />
+    <point id="p_240_110" x="260" y="190" />
+    <point id="p_300_110" x="400" y="190" />
 
-    <point id="p_000_155" x="0" y="155" />
-    <point id="p_060_155" x="60" y="155" />
-    <point id="p_105_155" x="105" y="155" />
-    <point id="p_195_155" x="195" y="155" />
-    <point id="p_240_155" x="240" y="155" />
-    <point id="p_300_155" x="300" y="155" />
+    <point id="p_000_155" x="0" y="220" />
+    <point id="p_060_155" x="140" y="220" />
+    <point id="p_105_155" x="170" y="220" />
+    <point id="p_195_155" x="230" y="220" />
+    <point id="p_240_155" x="260" y="220" />
+    <point id="p_300_155" x="400" y="220" />
 
-    <point id="p_000_200" x="0" y="200" />
-    <point id="p_060_200" x="60" y="200" />
-    <point id="p_240_200" x="240" y="200" />
-    <point id="p_300_200" x="300" y="200" />
+    <point id="p_000_200" x="0" y="250" />
+    <point id="p_060_200" x="140" y="250" />
+    <point id="p_240_200" x="260" y="250" />
+    <point id="p_300_200" x="400" y="250" />
 
-    <point id="p_000_245" x="0" y="245" />
-    <point id="p_060_245" x="60" y="245" />
-    <point id="p_105_245" x="105" y="245" />
-    <point id="p_195_245" x="195" y="245" />
-    <point id="p_202_5_245" x="202.5" y="245" />
-    <point id="p_240_245" x="240" y="245" />
-    <point id="p_300_245" x="300" y="245" />
+    <point id="p_000_245" x="0" y="280" />
+    <point id="p_060_245" x="140" y="280" />
+    <point id="p_105_245" x="170" y="280" />
+    <point id="p_195_245" x="230" y="280" />
+    <point id="p_202_5_245" x="235" y="280" />
+    <point id="p_240_245" x="260" y="280" />
+    <point id="p_300_245" x="400" y="280" />
 
-    <point id="p_000_290" x="0" y="290" />
-    <point id="p_060_290" x="60" y="290" />
-    <point id="p_105_290" x="105" y="290" />
-    <point id="p_150_290" x="150" y="290" />
-    <point id="p_195_290" x="195" y="290" />
-    <point id="p_202_5_290" x="202.5" y="290" />
-    <point id="p_240_290" x="240" y="290" />
-    <point id="p_300_290" x="300" y="290" />
+    <point id="p_000_290" x="0" y="310" />
+    <point id="p_060_290" x="140" y="310" />
+    <point id="p_105_290" x="170" y="310" />
+    <point id="p_150_290" x="200" y="310" />
+    <point id="p_195_290" x="230" y="310" />
+    <point id="p_202_5_290" x="235" y="310" />
+    <point id="p_240_290" x="260" y="310" />
+    <point id="p_300_290" x="400" y="310" />
 
-    <point id="p_097_5_110" x="97.5" y="110" />
-    <point id="p_097_5_155" x="97.5" y="155" />
+    <point id="p_097_5_110" x="155" y="190" />
+    <point id="p_097_5_155" x="155" y="220" />
 
-    <point id="p_000_400" x="0" y="400" />
-    <point id="p_060_400" x="60" y="400" />
-    <point id="p_105_400" x="105" y="400" />
-    <point id="p_150_400" x="150" y="400" />
-    <point id="p_195_400" x="195" y="400" />
-    <point id="p_240_400" x="240" y="400" />
-    <point id="p_300_400" x="300" y="400" />
+    <point id="p_000_400" x="0" y="500" />
+    <point id="p_060_400" x="140" y="500" />
+    <point id="p_105_400" x="170" y="500" />
+    <point id="p_150_400" x="200" y="500" />
+    <point id="p_195_400" x="230" y="500" />
+    <point id="p_240_400" x="260" y="500" />
+    <point id="p_300_400" x="400" y="500" />
 
     <!-- Traffic light polygon points. z is height above the road plane, in cm. -->
-    <point id="p_TL1_1" x="170" y="124" z="60" />
-    <point id="p_TL1_2" x="226" y="124" z="60" />
-    <point id="p_TL1_3" x="226" y="142" z="60" />
-    <point id="p_TL1_4" x="170" y="142" z="60" />
+    <point id="p_TL1_1" x="213.3" y="199.3" z="60" />
+    <point id="p_TL1_2" x="250.7" y="199.3" z="60" />
+    <point id="p_TL1_3" x="250.7" y="211.3" z="60" />
+    <point id="p_TL1_4" x="213.3" y="211.3" z="60" />
 
-    <point id="p_TL2_1" x="214" y="185" z="60" />
-    <point id="p_TL2_2" x="232" y="185" z="60" />
-    <point id="p_TL2_3" x="232" y="248" z="60" />
-    <point id="p_TL2_4" x="214" y="248" z="60" />
+    <point id="p_TL2_1" x="242.7" y="240" z="60" />
+    <point id="p_TL2_2" x="254.7" y="240" z="60" />
+    <point id="p_TL2_3" x="254.7" y="282" z="60" />
+    <point id="p_TL2_4" x="242.7" y="282" z="60" />
 
-    <point id="p_TL3_1" x="70" y="260" z="60" />
-    <point id="p_TL3_2" x="130" y="260" z="60" />
-    <point id="p_TL3_3" x="130" y="278" z="60" />
-    <point id="p_TL3_4" x="70" y="278" z="60" />
+    <point id="p_TL3_1" x="146.7" y="290" z="60" />
+    <point id="p_TL3_2" x="186.7" y="290" z="60" />
+    <point id="p_TL3_3" x="186.7" y="302" z="60" />
+    <point id="p_TL3_4" x="146.7" y="302" z="60" />
 
-    <point id="p_TL4_1" x="70" y="155" z="60" />
-    <point id="p_TL4_2" x="88" y="155" z="60" />
-    <point id="p_TL4_3" x="88" y="218" z="60" />
-    <point id="p_TL4_4" x="70" y="218" z="60" />
+    <point id="p_TL4_1" x="146.7" y="220" z="60" />
+    <point id="p_TL4_2" x="158.7" y="220" z="60" />
+    <point id="p_TL4_3" x="158.7" y="262" z="60" />
+    <point id="p_TL4_4" x="146.7" y="262" z="60" />
 
-    <!-- Conflict zone points. Each conflict zone is 30 x 30 cm. -->
+    <!-- Conflict zone points. Each conflict zone is 18 x 18 cm. -->
 
-    <point id="p_cz2_1" x="115" y="185" />
-    <point id="p_cz2_2" x="145" y="185" />
-    <point id="p_cz2_3" x="145" y="215" />
-    <point id="p_cz2_4" x="115" y="215" />
+    <point id="p_cz2_1" x="176" y="241" />
+    <point id="p_cz2_2" x="194" y="241" />
+    <point id="p_cz2_3" x="194" y="259" />
+    <point id="p_cz2_4" x="176" y="259" />
 
-    <point id="p_cz1_1" x="210" y="155" />
-    <point id="p_cz1_2" x="240" y="155" />
-    <point id="p_cz1_3" x="240" y="185" />
-    <point id="p_cz1_4" x="210" y="185" />
+    <point id="p_cz1_1" x="236" y="226" />
+    <point id="p_cz1_2" x="254" y="226" />
+    <point id="p_cz1_3" x="254" y="244" />
+    <point id="p_cz1_4" x="236" y="244" />
 
-    <point id="p_cz3_1" x="210" y="215" />
-    <point id="p_cz3_2" x="240" y="215" />
-    <point id="p_cz3_3" x="240" y="245" />
-    <point id="p_cz3_4" x="210" y="245" />
+    <point id="p_cz3_1" x="236" y="256" />
+    <point id="p_cz3_2" x="254" y="256" />
+    <point id="p_cz3_3" x="254" y="274" />
+    <point id="p_cz3_4" x="236" y="274" />
 
-    <point id="p_cz5_1" x="60" y="215" />
-    <point id="p_cz5_2" x="90" y="215" />
-    <point id="p_cz5_3" x="90" y="245" />
-    <point id="p_cz5_4" x="60" y="245" />
+    <point id="p_cz5_1" x="146" y="256" />
+    <point id="p_cz5_2" x="164" y="256" />
+    <point id="p_cz5_3" x="164" y="274" />
+    <point id="p_cz5_4" x="146" y="274" />
 
-    <point id="p_cz7_1" x="60" y="155" />
-    <point id="p_cz7_2" x="90" y="155" />
-    <point id="p_cz7_3" x="90" y="185" />
-    <point id="p_cz7_4" x="60" y="185" />
+    <point id="p_cz7_1" x="146" y="226" />
+    <point id="p_cz7_2" x="164" y="226" />
+    <point id="p_cz7_3" x="164" y="244" />
+    <point id="p_cz7_4" x="146" y="244" />
   </points>
 
   <linestrings>
