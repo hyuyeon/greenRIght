@@ -64,8 +64,8 @@ all: main-build
 main-build: greenRightRtos.elf secondary-outputs
 
 # Tool invocations
-greenRightRtos.elf greenRightRtos.map: $(OBJS) $(USER_OBJS) C:\dev\MCU\greenRightRtos\STM32F429ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "greenRightRtos.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\dev\MCU\greenRightRtos\STM32F429ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="greenRightRtos.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+greenRightRtos.elf greenRightRtos.map: $(OBJS) $(USER_OBJS) C:\Users\한국전파진흥협회\Desktop\수업자료\lastProject\greenRIght\RTOS\STM32F429ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "greenRightRtos.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\한국전파진흥협회\Desktop\수업자료\lastProject\greenRIght\RTOS\STM32F429ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="greenRightRtos.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

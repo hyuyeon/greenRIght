@@ -178,9 +178,9 @@ static uint8_t JudgeLeftTurnTlTime(
         return 0U;
     }
 
-    if ((tlSnap->color == SIG_RED) || (tlSnap->color == SIG_YELLOW))
+    if (tlSnap->color != SIG_GREEN)
     {
-        return 1U;
+        return 0U;
     }
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
@@ -245,10 +245,6 @@ static uint8_t JudgeLeftTurnOppStraight(
     const TrafficLight *tlSnap
 )
 {
-    if ((tlSnap->color == SIG_RED) || (tlSnap->color == SIG_YELLOW))
-    {
-        return 0U;
-    }
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
     double candTtc = calculate_Cand_TTC(*candSnap);
@@ -268,10 +264,6 @@ static uint8_t JudgeLeftTurnOppRight(
     const TrafficLight *tlSnap
 )
 {
-    if ((tlSnap->color == SIG_RED) || (tlSnap->color == SIG_YELLOW))
-    {
-        return 0U;
-    }
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
     double candTtc = calculate_Cand_TTC(*candSnap);
