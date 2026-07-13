@@ -43,7 +43,7 @@ bool can_handler_send_traffic_light(
     uint16_t cz_y,
     uint8_t maneuver
 );
-bool can_handler_send_no_traffic_light(CanHandler* handler, uint8_t maneuver);
+bool can_handler_send_no_traffic_light(CanHandler* handler, uint16_t cz_x, uint16_t cz_y, uint8_t maneuver);
 bool can_handler_send_traffic_light_unavailable(CanHandler* handler, uint8_t maneuver);
 
 #endif

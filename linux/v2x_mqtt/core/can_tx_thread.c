@@ -227,7 +227,7 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
     }
 
     if (!self) {
-        can_handler_send_no_traffic_light(&context->can, maneuver);
+        can_handler_send_no_traffic_light(&context->can, 0, 0, maneuver);
         return;
     }
 
@@ -242,7 +242,7 @@ static void send_candidate_traffic_light(AppContext* context, const VehicleInfo*
     TrafficLight traffic_light;
     uint8_t candidate_tl_id = INVALID_ID;
     if (!traffic_light_manager_get_candidate(&context->traffic_lights, &candidate_tl_id, &traffic_light)) {
-        can_handler_send_no_traffic_light(&context->can, maneuver);
+        can_handler_send_no_traffic_light(&context->can, cz_x, cz_y, maneuver);
         return;
     }
 

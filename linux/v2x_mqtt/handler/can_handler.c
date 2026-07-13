@@ -356,7 +356,7 @@ bool can_handler_send_traffic_light(
 )
 {
     if (!traffic_light || tl_type_mask == 0) {
-        return can_handler_send_no_traffic_light(handler, maneuver);
+        return can_handler_send_no_traffic_light(handler, cz_x, cz_y, maneuver);
     }
 
     uint64_t payload = 0;
@@ -371,9 +371,11 @@ bool can_handler_send_traffic_light(
     return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
 }
 
-bool can_handler_send_no_traffic_light(CanHandler* handler, uint8_t maneuver)
+bool can_handler_send_no_traffic_light(CanHandler* handler, uint16_t cz_x, uint16_t cz_y, uint8_t maneuver)
 {
     uint64_t payload = 0;
+    payload |= ((uint64_t)(cz_x & 0x03FFu)) << 16;
+    payload |= ((uint64_t)(cz_y & 0x07FFu)) << 5;
     payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
     uint8_t update_mask = 0x21;
