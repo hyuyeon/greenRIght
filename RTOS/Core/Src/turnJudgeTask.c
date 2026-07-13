@@ -6,7 +6,6 @@
 
 extern SemaphoreHandle_t buzzerSem;
 
-
 #define CRITICAL_GAP_SEC 8.73
 
 static uint8_t JudgeLeftTurnOppStraight(
@@ -35,7 +34,8 @@ static const osThreadAttr_t judgeTask_attributes = {
     .name = "turnJudgeTask", .stack_size = 512 * 4, .priority = (osPriority_t) osPriorityHigh,
 };
 
-
+//The reason "Why Judge~~ function return type is int" is very simple.
+//It returns 
 static uint8_t JudgeRightTurnLeftStraight(
     const EgoVehicle *egoSnap,
     const CandidateVehicle *candSnap,
@@ -173,6 +173,11 @@ static uint8_t JudgeLeftTurnTlTime(
     const TrafficLight *tlSnap
 )
 {
+    if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U))
+	{
+		return 0U;
+	}
+
     if (tlSnap->color == 255U)
     {
         return 0U;
