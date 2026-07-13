@@ -1,6 +1,3 @@
-
-
-
 #ifndef RIGHT_TURN_JUDGE_TASK_H
 #define RIGHT_TURN_JUDGE_TASK_H
 
@@ -22,6 +19,8 @@ extern TrafficLight tl;
 extern SemaphoreHandle_t turnJudgeSem;
 extern QueueHandle_t dicisionQueue;
 extern osThreadId_t JudgeTaskHandle;
+
+#define YELLOW_DURATION_SEC 3.0
 
 void TurnJudgeTask_Init(void);
 

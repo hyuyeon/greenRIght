@@ -6,9 +6,14 @@
 
 extern SemaphoreHandle_t buzzerSem;
 
-
+//unprotected left turn duration in real-time vehicle system(5.5s) -> experimental environment(8.73s)
+//you can find this on 16p of our handout
 #define CRITICAL_GAP_SEC 8.73
 
+//snapshot is a copy of the latest data received from the CAN bus
+//egoSnap: ego vehicle snapshot
+//candSnap: candidate vehicle snapshot
+//tlSnap: traffic light snapshot
 static uint8_t JudgeLeftTurnOppStraight(
     const EgoVehicle *egoSnap,
     const CandidateVehicle *candSnap,
@@ -35,38 +40,46 @@ static const osThreadAttr_t judgeTask_attributes = {
     .name = "turnJudgeTask", .stack_size = 512 * 4, .priority = (osPriority_t) osPriorityHigh,
 };
 
-
+//The reason "Why Judge~~ function return type is int" is very simple.
+//This Function returns 0 when the ego vehicle can go, and returns 1 when the ego vehicle should stop.
+//simply, 0 means zero error, and 1 means there is a warning. So, we can use int type to return the result.
 static uint8_t JudgeRightTurnLeftStraight(
     const EgoVehicle *egoSnap,
     const CandidateVehicle *candSnap,
     const TrafficLight *tlSnap
 )
 {
-	if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U)) //?대? ?고쉶?꾪븷??conflict zone 吏?щ떎????
+	if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U)) //if the traffic light's conflict zone is (0,0)
 	{
-	    //?쒖뒪??援ъ“ ???대윺 ???녾릿 ?섏?留?洹몃깷 ?덉쇅 泥섎━
+	    //then the ego vehicle can go because there is no traffic light in front of the ego vehicle.
 		return 0U;
 	}
 
-    if (candSnap->speed > 0U)
+    if (candSnap->speed > 0U) //if the candidate vehicle is moving
     {
+        //then the ego vehicle should stop because the candidate vehicle has priority.
         return 1U;
     }
 
-    if (tlSnap->color == 255U) //?쒖뒪??援ъ“ ???대윺 ???녾릿 ?섏?留?洹몃깷 ?덉쇅 泥섎━
+    if (tlSnap->color == 255U) //if the traffic light's color is unknown
     {
+        //then the ego vehicle should stop because the traffic light's color is unknown.
           return 0U;
     }
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 0U);
 
-    if ((tlSnap->color == SIG_GREEN) && ((double)tlSnap->time_left > egoTtc))
+    //if the traffic light is green
+    //and the ego vehicle can pass the conflict zone before the traffic light turns yellow
+    if ((tlSnap->color == SIG_GREEN) && (((double)(tlSnap->time_left + YELLOW_DURATION_SEC)) > egoTtc))
     {
+        //then the ego vehicle can go.
         return 0U;
     }
 
     return 1U;
 }
+
 
 static uint8_t JudgeRightTurnOppLeft(
     const EgoVehicle *egoSnap,
@@ -173,6 +186,11 @@ static uint8_t JudgeLeftTurnTlTime(
     const TrafficLight *tlSnap
 )
 {
+    if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U))
+	{
+		return 0U;
+	}
+
     if (tlSnap->color == 255U)
     {
         return 0U;
@@ -185,7 +203,7 @@ static uint8_t JudgeLeftTurnTlTime(
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
 
-    if (egoTtc < ((double)tlSnap->time_left))
+    if (egoTtc < ((double)tlSnap->time_left + YELLOW_DURATION_SEC))
     {
         return 0U;
     }
