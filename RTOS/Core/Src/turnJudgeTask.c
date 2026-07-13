@@ -60,7 +60,7 @@ static uint8_t JudgeRightTurnLeftStraight(
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 0U);
 
-    if ((tlSnap->color == SIG_GREEN) && ((double)tlSnap->time_left > egoTtc))
+    if ((tlSnap->color == SIG_GREEN) && (((double)(tlSnap->time_left + YELLOW_DURATION_SEC)) > egoTtc))
     {
         return 0U;
     }
@@ -185,7 +185,7 @@ static uint8_t JudgeLeftTurnTlTime(
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
 
-    if (egoTtc < ((double)tlSnap->time_left))
+    if (egoTtc < ((double)tlSnap->time_left + YELLOW_DURATION_SEC))
     {
         return 0U;
     }
