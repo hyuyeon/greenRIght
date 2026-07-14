@@ -256,9 +256,6 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
         if (tl_type_mask == 0U)
         {
             new_color = 255U;
-            new_time_left = 0U;
-            new_cz_x = 0U;
-            new_cz_y = 0U;
         }
 
         taskENTER_CRITICAL();

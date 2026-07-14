@@ -1,11 +1,11 @@
-#ifndef TTC_H
+﻿#ifndef TTC_H
 #define TTC_H
 
 #include <stdint.h>
 #include "common.h"
 
 #define TTC_SAFE 1000000.0
-#define TTC_CREEP_SPEED_M_PER_MIN 42U
+#define TTC_CREEP_SPEED_M_PER_MIN 15U
 
 /* =========================================================
  * TTC(Time-To-Collision) 계산 모듈

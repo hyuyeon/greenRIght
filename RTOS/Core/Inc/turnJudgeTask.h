@@ -20,7 +20,7 @@ extern SemaphoreHandle_t turnJudgeSem;
 extern QueueHandle_t dicisionQueue;
 extern osThreadId_t JudgeTaskHandle;
 
-#define YELLOW_DURATION_SEC 3.0
+#define YELLOW_DURATION_SEC 1.0
 
 void TurnJudgeTask_Init(void);
 

@@ -100,17 +100,10 @@ void DicisionDisplayTask(void *argument)
     Dicision d;
     uint32_t waitCount = 0U;
 
-    LOG_INFO("[LCD] task start q=0x%08lx\n", (unsigned long)(uint32_t)dicisionQueue);
-
     for (;;) {
         if (xQueueReceive(dicisionQueue, &d, pdMS_TO_TICKS(1000U)) == pdTRUE) {
             TurnDirection dir = Dicision_ToTurnDirection(d.turnState);
             uint8_t warningMask = Dicision_ToWarningMask(&d);
-
-            LOG_INFO("[LCD] dec rx turn=%u ped=%u mask=0x%02x\n",
-                (unsigned)d.turnState,
-                (unsigned)d.pedestrianFlag,
-                (unsigned)warningMask);
 
             Display_LockLcd();
             Dashboard_DrawDirection(dir);
@@ -121,7 +114,6 @@ void DicisionDisplayTask(void *argument)
             if ((waitCount % 5U) == 0U) {
                 PersonFlagDebugSnapshot pedDbg;
                 PersonFlag_GetDebugSnapshot(&pedDbg);
-                LOG_TRACE("[LCD] wait q=0x%08lx\n", (unsigned long)(uint32_t)dicisionQueue);
                 LOG_TRACE("[PED] irq=%lu rx=%lu valid=%lu invalid=%lu sem=%lu last=0x%02x dec=%u err(o%lu,f%lu,n%lu)\n",
                     (unsigned long)pedDbg.irqCount,
                     (unsigned long)pedDbg.rxByteCount,

@@ -5,6 +5,6 @@
 ../Core/Src/can_rx_task.c:122:16:CAN_Rx	2
 ../Core/Src/can_rx_task.c:163:13:CanRx_DebugPrintMsg4	1
 ../Core/Src/can_rx_task.c:181:13:CanRx_HandleFrame	18
-../Core/Src/can_rx_task.c:304:13:CanRxTask	2
-../Core/Src/can_rx_task.c:325:6:CanRxTask_Init	1
-../Core/Src/can_rx_task.c:330:6:CAN1_RX0_IRQHandler	3
+../Core/Src/can_rx_task.c:301:13:CanRxTask	2
+../Core/Src/can_rx_task.c:322:6:CanRxTask_Init	1
+../Core/Src/can_rx_task.c:327:6:CAN1_RX0_IRQHandler	3

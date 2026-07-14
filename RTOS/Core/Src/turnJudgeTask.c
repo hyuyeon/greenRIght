@@ -24,18 +24,9 @@ static uint8_t JudgeLeftTurnOppRight(
     const CandidateVehicle *candSnap,
     const TrafficLight *tlSnap
 );
-static void LeftTurn_DebugPrintTlTime(
-    const EgoVehicle *egoSnap,
-    const TrafficLight *tlSnap,
-    uint8_t judgeResult
-);
-static void LeftTurn_DebugPrintCandidate(
-    const char *tag,
-    const EgoVehicle *egoSnap,
-    const CandidateVehicle *candSnap,
-    const TrafficLight *tlSnap,
-    uint8_t judgeResult
-);
+static uint32_t TtcToCentisec(double ttc);
+
+
 static const osThreadAttr_t judgeTask_attributes = {
     .name = "turnJudgeTask", .stack_size = 512 * 4, .priority = (osPriority_t) osPriorityHigh,
 };
@@ -49,32 +40,183 @@ static uint8_t JudgeRightTurnLeftStraight(
     const TrafficLight *tlSnap
 )
 {
+	enum
+	{
+		RT_LS_REASON_NO_CZ = 0U,
+		RT_LS_REASON_CAND_MOVING,
+		RT_LS_REASON_NO_TL,
+		RT_LS_REASON_SIGNAL_TIME,
+		RT_LS_REASON_SIGNAL_OR_TIME
+	};
+
+	static uint8_t hasPreviousLog = 0U;
+	static uint8_t previousJudge = 0U;
+	static uint8_t previousReason = 0U;
+	static TickType_t lastLogTick = 0U;
+	const TickType_t nowTick = xTaskGetTickCount();
+
 	if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U)) //if the traffic light's conflict zone is (0,0)
 	{
 	    //then the ego vehicle can go because there is no traffic light in front of the ego vehicle.
+		if ((hasPreviousLog == 0U) ||
+		    (previousJudge != 0U) ||
+		    (previousReason != RT_LS_REASON_NO_CZ) ||
+		    ((TickType_t)(nowTick - lastLogTick) >= pdMS_TO_TICKS(500U)))
+		{
+			LOG_DEBUG(
+			    "[RT-LS] safe reason=no_cz type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=N/A pass=N/A judge=0\n",
+			    (unsigned)candSnap->type,
+			    (unsigned)egoSnap->x,
+			    (unsigned)egoSnap->y,
+			    (unsigned)egoSnap->speed,
+			    (unsigned)candSnap->x,
+			    (unsigned)candSnap->y,
+			    (unsigned)candSnap->speed,
+			    (unsigned)tlSnap->color,
+			    (unsigned)tlSnap->time_left,
+			    (unsigned)tlSnap->cz_x,
+			    (unsigned)tlSnap->cz_y
+			);
+			hasPreviousLog = 1U;
+			previousJudge = 0U;
+			previousReason = RT_LS_REASON_NO_CZ;
+			lastLogTick = nowTick;
+		}
 		return 0U;
 	}
 
     if (candSnap->speed > 0U) //if the candidate vehicle is moving
     {
         //then the ego vehicle should stop because the candidate vehicle has priority.
+        if ((hasPreviousLog == 0U) ||
+            (previousJudge != 1U) ||
+            (previousReason != RT_LS_REASON_CAND_MOVING) ||
+            ((TickType_t)(nowTick - lastLogTick) >= pdMS_TO_TICKS(500U)))
+        {
+            LOG_DEBUG(
+                "[RT-LS] warn reason=cand_moving type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) judge=1\n",
+                (unsigned)candSnap->type,
+                (unsigned)egoSnap->x,
+                (unsigned)egoSnap->y,
+                (unsigned)egoSnap->speed,
+                (unsigned)candSnap->x,
+                (unsigned)candSnap->y,
+                (unsigned)candSnap->speed,
+                (unsigned)tlSnap->color,
+                (unsigned)tlSnap->time_left,
+                (unsigned)tlSnap->cz_x,
+                (unsigned)tlSnap->cz_y
+            );
+            hasPreviousLog = 1U;
+            previousJudge = 1U;
+            previousReason = RT_LS_REASON_CAND_MOVING;
+            lastLogTick = nowTick;
+        }
         return 1U;
     }
 
     if (tlSnap->color == 255U) //if the traffic light's color is unknown
     {
-        //then the ego vehicle should stop because the traffic light's color is unknown.
-          return 0U;
+        //then the ego vehicle skip judgement because the traffic light's color is unknown.
+        if ((hasPreviousLog == 0U) ||
+            (previousJudge != 0U) ||
+            (previousReason != RT_LS_REASON_NO_TL) ||
+            ((TickType_t)(nowTick - lastLogTick) >= pdMS_TO_TICKS(500U)))
+        {
+            LOG_DEBUG(
+                "[RT-LS] safe reason=no_tl type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=N/A pass=N/A judge=0\n",
+                (unsigned)candSnap->type,
+                (unsigned)egoSnap->x,
+                (unsigned)egoSnap->y,
+                (unsigned)egoSnap->speed,
+                (unsigned)candSnap->x,
+                (unsigned)candSnap->y,
+                (unsigned)candSnap->speed,
+                (unsigned)tlSnap->color,
+                (unsigned)tlSnap->time_left,
+                (unsigned)tlSnap->cz_x,
+                (unsigned)tlSnap->cz_y
+            );
+            hasPreviousLog = 1U;
+            previousJudge = 0U;
+            previousReason = RT_LS_REASON_NO_TL;
+            lastLogTick = nowTick;
+        }
+        return 0U;
     }
 
     double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 0U);
+    double passableTimeSec = (double)tlSnap->time_left;
 
-    //if the traffic light is green
-    //and the ego vehicle can pass the conflict zone before the traffic light turns yellow
-    if ((tlSnap->color == SIG_GREEN) && (((double)(tlSnap->time_left + YELLOW_DURATION_SEC)) > egoTtc))
+    if (tlSnap->color == SIG_GREEN)
     {
-        //then the ego vehicle can go.
+        passableTimeSec += YELLOW_DURATION_SEC;
+    }
+
+    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
+    uint32_t passCs = TtcToCentisec(passableTimeSec);
+
+    if (((tlSnap->color == SIG_GREEN) || (tlSnap->color == SIG_YELLOW)) &&
+        (passableTimeSec > egoTtc))
+    {
+        if ((hasPreviousLog == 0U) ||
+            (previousJudge != 0U) ||
+            (previousReason != RT_LS_REASON_SIGNAL_TIME) ||
+            ((TickType_t)(nowTick - lastLogTick) >= pdMS_TO_TICKS(500U)))
+        {
+            LOG_DEBUG(
+                "[RT-LS] safe reason=signal_time type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=%lu.%02lus judge=0\n",
+                (unsigned)candSnap->type,
+                (unsigned)egoSnap->x,
+                (unsigned)egoSnap->y,
+                (unsigned)egoSnap->speed,
+                (unsigned)candSnap->x,
+                (unsigned)candSnap->y,
+                (unsigned)candSnap->speed,
+                (unsigned)tlSnap->color,
+                (unsigned)tlSnap->time_left,
+                (unsigned)tlSnap->cz_x,
+                (unsigned)tlSnap->cz_y,
+                (unsigned long)(egoTtcCs / 100U),
+                (unsigned long)(egoTtcCs % 100U),
+                (unsigned long)(passCs / 100U),
+                (unsigned long)(passCs % 100U)
+            );
+            hasPreviousLog = 1U;
+            previousJudge = 0U;
+            previousReason = RT_LS_REASON_SIGNAL_TIME;
+            lastLogTick = nowTick;
+        }
         return 0U;
+    }
+
+    if ((hasPreviousLog == 0U) ||
+        (previousJudge != 1U) ||
+        (previousReason != RT_LS_REASON_SIGNAL_OR_TIME) ||
+        ((TickType_t)(nowTick - lastLogTick) >= pdMS_TO_TICKS(500U)))
+    {
+        LOG_DEBUG(
+            "[RT-LS] warn reason=signal_or_time type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=%lu.%02lus judge=1\n",
+            (unsigned)candSnap->type,
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)candSnap->x,
+            (unsigned)candSnap->y,
+            (unsigned)candSnap->speed,
+            (unsigned)tlSnap->color,
+            (unsigned)tlSnap->time_left,
+            (unsigned)tlSnap->cz_x,
+            (unsigned)tlSnap->cz_y,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U),
+            (unsigned long)(passCs / 100U),
+            (unsigned long)(passCs % 100U)
+        );
+        hasPreviousLog = 1U;
+        previousJudge = 1U;
+        previousReason = RT_LS_REASON_SIGNAL_OR_TIME;
+        lastLogTick = nowTick;
     }
 
     return 1U;
@@ -90,47 +232,6 @@ static uint8_t JudgeRightTurnOppLeft(
     (void)candSnap;
 
     return 1U;
-}
-
-static void RightTurn_DebugPrintLeftStraight(
-    const EgoVehicle *egoSnap,
-    const CandidateVehicle *candSnap,
-    const TrafficLight *tlSnap,
-    uint8_t judgeResult
-)
-{
-    char line[192];
-    double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 0U);
-    uint32_t egoTtcCs;
-    uint8_t greenOk = (tlSnap->color == SIG_GREEN) ? 1U : 0U;
-    uint8_t timeOk = ((double)tlSnap->time_left > egoTtc) ? 1U : 0U;
-
-    if (egoTtc < 0.0) {
-        egoTtcCs = 0U;
-    } else if (egoTtc > 9999.99) {
-        egoTtcCs = 999999U;
-    } else {
-        egoTtcCs = (uint32_t)((egoTtc * 100.0) + 0.5);
-    }
-
-    (void)snprintf(line, sizeof(line),
-        "[RT-LS] type=0x%02x speed=%u ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus greenOk=%u timeOk=%u judge=%u\n",
-        (unsigned)candSnap->type,
-        (unsigned)candSnap->speed,
-        (unsigned)egoSnap->x,
-        (unsigned)egoSnap->y,
-        (unsigned)egoSnap->speed,
-        (unsigned)tlSnap->color,
-        (unsigned)tlSnap->time_left,
-        (unsigned)tlSnap->cz_x,
-        (unsigned)tlSnap->cz_y,
-        (unsigned long)(egoTtcCs / 100U),
-        (unsigned long)(egoTtcCs % 100U),
-        (unsigned)greenOk,
-        (unsigned)timeOk,
-        (unsigned)judgeResult);
-
-    LOG_DEBUG("%s", line);
 }
 
 static void BuildRightTurnDecision(
@@ -160,7 +261,6 @@ static void BuildRightTurnDecision(
 
     {
         uint8_t leftStraightJudge = JudgeRightTurnLeftStraight(egoSnap, candSnap, tlSnap);
-        RightTurn_DebugPrintLeftStraight(egoSnap, candSnap, tlSnap, leftStraightJudge);
 
         if (leftStraightJudge != 0U)
         {
@@ -187,26 +287,93 @@ static uint8_t JudgeLeftTurnTlTime(
 )
 {
     if ((tlSnap->cz_x == 0U) && (tlSnap->cz_y == 0U))
-	{
-		return 0U;
-	}
+    {
+        LOG_DEBUG(
+            "[LT-TL] skip no_cz ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=N/A pass=N/A judge=0\n",
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)tlSnap->color,
+            (unsigned)tlSnap->time_left,
+            (unsigned)tlSnap->cz_x,
+            (unsigned)tlSnap->cz_y
+        );
+        return 0U;
+    }
+
+    double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
+    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
 
     if (tlSnap->color == 255U)
     {
+        LOG_DEBUG(
+            "[LT-TL] skip no_tl ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=N/A judge=0\n",
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)tlSnap->color,
+            (unsigned)tlSnap->time_left,
+            (unsigned)tlSnap->cz_x,
+            (unsigned)tlSnap->cz_y,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U)
+        );
         return 0U;
     }
 
     if (tlSnap->color != SIG_GREEN)
     {
+        LOG_DEBUG(
+            "[LT-TL] skip not_green ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=N/A judge=0\n",
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)tlSnap->color,
+            (unsigned)tlSnap->time_left,
+            (unsigned)tlSnap->cz_x,
+            (unsigned)tlSnap->cz_y,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U)
+        );
         return 0U;
     }
 
-    double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
+    double passableTimeSec = (double)tlSnap->time_left + YELLOW_DURATION_SEC;
+    uint32_t passCs = TtcToCentisec(passableTimeSec);
 
-    if (egoTtc < ((double)tlSnap->time_left + YELLOW_DURATION_SEC))
+    if (egoTtc < passableTimeSec)
     {
+        LOG_DEBUG(
+            "[LT-TL] safe ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=%lu.%02lus judge=0\n",
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)tlSnap->color,
+            (unsigned)tlSnap->time_left,
+            (unsigned)tlSnap->cz_x,
+            (unsigned)tlSnap->cz_y,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U),
+            (unsigned long)(passCs / 100U),
+            (unsigned long)(passCs % 100U)
+        );
         return 0U;
     }
+
+    LOG_DEBUG(
+        "[LT-TL] warn ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus pass=%lu.%02lus judge=1\n",
+        (unsigned)egoSnap->x,
+        (unsigned)egoSnap->y,
+        (unsigned)egoSnap->speed,
+        (unsigned)tlSnap->color,
+        (unsigned)tlSnap->time_left,
+        (unsigned)tlSnap->cz_x,
+        (unsigned)tlSnap->cz_y,
+        (unsigned long)(egoTtcCs / 100U),
+        (unsigned long)(egoTtcCs % 100U),
+        (unsigned long)(passCs / 100U),
+        (unsigned long)(passCs % 100U)
+    );
 
     return 1U;
 }
@@ -225,7 +392,6 @@ static void BuildLeftTurnDecision(
      * 1. ?占쏀샇???占쎄컙 遺占??占쎈떒
      */
     uint8_t tlJudge = JudgeLeftTurnTlTime(egoSnap, tlSnap);
-    LeftTurn_DebugPrintTlTime(egoSnap, tlSnap, tlJudge);
     if (tlJudge != 0U)
     {
         decision->tlWarningFlag = 1U;
@@ -238,7 +404,7 @@ static void BuildLeftTurnDecision(
     if ((candSnap->type & CAND_LT_OPP_STRAIGHT) != 0U)
     {
         uint8_t oppStraightJudge = JudgeLeftTurnOppStraight(egoSnap, candSnap, tlSnap);
-        LeftTurn_DebugPrintCandidate("OS", egoSnap, candSnap, tlSnap, oppStraightJudge);
+
         if (oppStraightJudge != 0U)
         {
             decision->OppStraightFlag = 1U;
@@ -248,7 +414,7 @@ static void BuildLeftTurnDecision(
     if ((candSnap->type & CAND_LT_OPP_RIGHT) != 0U)
     {
         uint8_t oppRightJudge = JudgeLeftTurnOppRight(egoSnap, candSnap, tlSnap);
-        LeftTurn_DebugPrintCandidate("OR", egoSnap, candSnap, tlSnap, oppRightJudge);
+
         if (oppRightJudge != 0U)
         {
             decision->OppRightFlag = 1U;
@@ -267,11 +433,57 @@ static uint8_t JudgeLeftTurnOppStraight(
     double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
     double candTtc = calculate_Cand_TTC(*candSnap);
     double ttcGap = fabs(egoTtc - candTtc);
+    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
+    uint32_t candTtcCs = TtcToCentisec(candTtc);
+    uint32_t gapCs = TtcToCentisec(ttcGap);
 
     if (ttcGap >= CRITICAL_GAP_SEC)
     {
+        LOG_DEBUG(
+            "[LT-OS] safe type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u,cz%u,%u) tl=c%u egoTtc=%lu.%02lus candTtc=%lu.%02lus gap=%lu.%02lus critical=%lu.%02lus judge=0\n",
+            (unsigned)candSnap->type,
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)candSnap->x,
+            (unsigned)candSnap->y,
+            (unsigned)candSnap->speed,
+            (unsigned)candSnap->cz_x,
+            (unsigned)candSnap->cz_y,
+            (unsigned)tlSnap->color,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U),
+            (unsigned long)(candTtcCs / 100U),
+            (unsigned long)(candTtcCs % 100U),
+            (unsigned long)(gapCs / 100U),
+            (unsigned long)(gapCs % 100U),
+            (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) / 100U),
+            (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) % 100U)
+        );
         return 0U;
     }
+
+    LOG_DEBUG(
+        "[LT-OS] warn type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u,cz%u,%u) tl=c%u egoTtc=%lu.%02lus candTtc=%lu.%02lus gap=%lu.%02lus critical=%lu.%02lus judge=1\n",
+        (unsigned)candSnap->type,
+        (unsigned)egoSnap->x,
+        (unsigned)egoSnap->y,
+        (unsigned)egoSnap->speed,
+        (unsigned)candSnap->x,
+        (unsigned)candSnap->y,
+        (unsigned)candSnap->speed,
+        (unsigned)candSnap->cz_x,
+        (unsigned)candSnap->cz_y,
+        (unsigned)tlSnap->color,
+        (unsigned long)(egoTtcCs / 100U),
+        (unsigned long)(egoTtcCs % 100U),
+        (unsigned long)(candTtcCs / 100U),
+        (unsigned long)(candTtcCs % 100U),
+        (unsigned long)(gapCs / 100U),
+        (unsigned long)(gapCs % 100U),
+        (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) / 100U),
+        (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) % 100U)
+    );
 
     return 1U;
 }
@@ -282,15 +494,60 @@ static uint8_t JudgeLeftTurnOppRight(
     const TrafficLight *tlSnap
 )
 {
-
     double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
     double candTtc = calculate_Cand_TTC(*candSnap);
     double ttcGap = fabs(egoTtc - candTtc);
+    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
+    uint32_t candTtcCs = TtcToCentisec(candTtc);
+    uint32_t gapCs = TtcToCentisec(ttcGap);
 
     if (ttcGap >= CRITICAL_GAP_SEC)
     {
+        LOG_DEBUG(
+            "[LT-OR] safe type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u,cz%u,%u) tl=c%u egoTtc=%lu.%02lus candTtc=%lu.%02lus gap=%lu.%02lus critical=%lu.%02lus judge=0\n",
+            (unsigned)candSnap->type,
+            (unsigned)egoSnap->x,
+            (unsigned)egoSnap->y,
+            (unsigned)egoSnap->speed,
+            (unsigned)candSnap->x,
+            (unsigned)candSnap->y,
+            (unsigned)candSnap->speed,
+            (unsigned)candSnap->cz_x,
+            (unsigned)candSnap->cz_y,
+            (unsigned)tlSnap->color,
+            (unsigned long)(egoTtcCs / 100U),
+            (unsigned long)(egoTtcCs % 100U),
+            (unsigned long)(candTtcCs / 100U),
+            (unsigned long)(candTtcCs % 100U),
+            (unsigned long)(gapCs / 100U),
+            (unsigned long)(gapCs % 100U),
+            (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) / 100U),
+            (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) % 100U)
+        );
         return 0U;
     }
+
+    LOG_DEBUG(
+        "[LT-OR] warn type=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u,cz%u,%u) tl=c%u egoTtc=%lu.%02lus candTtc=%lu.%02lus gap=%lu.%02lus critical=%lu.%02lus judge=1\n",
+        (unsigned)candSnap->type,
+        (unsigned)egoSnap->x,
+        (unsigned)egoSnap->y,
+        (unsigned)egoSnap->speed,
+        (unsigned)candSnap->x,
+        (unsigned)candSnap->y,
+        (unsigned)candSnap->speed,
+        (unsigned)candSnap->cz_x,
+        (unsigned)candSnap->cz_y,
+        (unsigned)tlSnap->color,
+        (unsigned long)(egoTtcCs / 100U),
+        (unsigned long)(egoTtcCs % 100U),
+        (unsigned long)(candTtcCs / 100U),
+        (unsigned long)(candTtcCs % 100U),
+        (unsigned long)(gapCs / 100U),
+        (unsigned long)(gapCs % 100U),
+        (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) / 100U),
+        (unsigned long)((uint32_t)(CRITICAL_GAP_SEC * 100.0) % 100U)
+    );
 
     return 1U;
 }
@@ -305,92 +562,6 @@ static uint32_t TtcToCentisec(double ttc)
     }
 
     return (uint32_t)((ttc * 100.0) + 0.5);
-}
-
-static void LeftTurn_DebugPrintTlTime(
-    const EgoVehicle *egoSnap,
-    const TrafficLight *tlSnap,
-    uint8_t judgeResult
-)
-{
-    char line[192];
-    double egoTtc = calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U);
-    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
-    uint8_t redYellow = ((tlSnap->color == SIG_RED) || (tlSnap->color == SIG_YELLOW)) ? 1U : 0U;
-    uint8_t timeOk = (egoTtc < ((double)tlSnap->time_left)) ? 1U : 0U;
-
-    (void)snprintf(line, sizeof(line),
-        "[LT-TL] ego=(%u,%u,%u) tl=(c%u,t%u,cz%u,%u) egoTtc=%lu.%02lus redYellow=%u timeOk=%u judge=%u\n",
-        (unsigned)egoSnap->x,
-        (unsigned)egoSnap->y,
-        (unsigned)egoSnap->speed,
-        (unsigned)tlSnap->color,
-        (unsigned)tlSnap->time_left,
-        (unsigned)tlSnap->cz_x,
-        (unsigned)tlSnap->cz_y,
-        (unsigned long)(egoTtcCs / 100U),
-        (unsigned long)(egoTtcCs % 100U),
-        (unsigned)redYellow,
-        (unsigned)timeOk,
-        (unsigned)judgeResult);
-
-    LOG_DEBUG("%s", line);
-}
-
-static void LeftTurn_DebugPrintCandidate(
-    const char *tag,
-    const EgoVehicle *egoSnap,
-    const CandidateVehicle *candSnap,
-    const TrafficLight *tlSnap,
-    uint8_t judgeResult
-)
-{
-    char line[224];
-    double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
-    double candTtc = calculate_Cand_TTC(*candSnap);
-    double gap = fabs(egoTtc - candTtc);
-    uint32_t egoTtcCs = TtcToCentisec(egoTtc);
-    uint32_t candTtcCs = TtcToCentisec(candTtc);
-    uint32_t gapCs = TtcToCentisec(gap);
-    uint8_t redYellow = ((tlSnap->color == SIG_RED) || (tlSnap->color == SIG_YELLOW)) ? 1U : 0U;
-    uint8_t gapOk = (gap >= CRITICAL_GAP_SEC) ? 1U : 0U;
-
-    (void)snprintf(line, sizeof(line),
-        "[LT-%s] type=0x%02x speed=%u ego=(%u,%u,%u) cand=(%u,%u,cz%u,%u) tl=c%u egoTtc=%lu.%02lus candTtc=%lu.%02lus gap=%lu.%02lus redYellow=%u gapOk=%u judge=%u\n",
-        tag,
-        (unsigned)candSnap->type,
-        (unsigned)candSnap->speed,
-        (unsigned)egoSnap->x,
-        (unsigned)egoSnap->y,
-        (unsigned)egoSnap->speed,
-        (unsigned)candSnap->x,
-        (unsigned)candSnap->y,
-        (unsigned)candSnap->cz_x,
-        (unsigned)candSnap->cz_y,
-        (unsigned)tlSnap->color,
-        (unsigned long)(egoTtcCs / 100U),
-        (unsigned long)(egoTtcCs % 100U),
-        (unsigned long)(candTtcCs / 100U),
-        (unsigned long)(candTtcCs % 100U),
-        (unsigned long)(gapCs / 100U),
-        (unsigned long)(gapCs % 100U),
-        (unsigned)redYellow,
-        (unsigned)gapOk,
-        (unsigned)judgeResult);
-
-    LOG_DEBUG("%s", line);
-}
-static void DebugPrintTtcValue(const char *name, double ttc)
-{
-    uint32_t centisec = TtcToCentisec(ttc);
-
-    if (centisec >= 999999U) {
-        LOG_DEBUG(" %s=SAFE", name);
-    } else {
-        LOG_DEBUG(" %s=%lu.%02lus", name,
-            (unsigned long)(centisec / 100U),
-            (unsigned long)(centisec % 100U));
-    }
 }
 
 static uint8_t DecisionWarningMask(const Dicision *decision)
@@ -482,8 +653,15 @@ static void BuildDecisionReason(
             AppendDecisionReason(reason, reasonSize, "RT_CZ_PASSED");
         } else if (tlSnap->color == 255U) {
             AppendDecisionReason(reason, reasonSize, "RT_NO_TL");
-        } else if ((tlSnap->color == SIG_GREEN) && ((double)tlSnap->time_left > egoTtc)) {
-            AppendDecisionReason(reason, reasonSize, "RT_LS_SAFE");
+        } else {
+            double passableTimeSec = (double)tlSnap->time_left;
+            if (tlSnap->color == SIG_GREEN) {
+                passableTimeSec += YELLOW_DURATION_SEC;
+            }
+            if (((tlSnap->color == SIG_GREEN) || (tlSnap->color == SIG_YELLOW)) &&
+                (passableTimeSec > egoTtc)) {
+                AppendDecisionReason(reason, reasonSize, "RT_LS_SAFE");
+            }
         }
     }
 
@@ -570,63 +748,7 @@ static void DecisionChange_InfoPrint(
         (unsigned long)(gapCs / 100U),
         (unsigned long)(gapCs % 100U));
 }
-static void TurnJudge_DebugPrint(
-    uint8_t maneuverSnap,
-    uint8_t pedFlagSnap,
-    const EgoVehicle *egoSnap,
-    const CandidateVehicle *candSnap,
-    const TrafficLight *tlSnap,
-    const Dicision *decision,
-    uint8_t queued
-)
-{
-    LOG_DEBUG(
-        "[TJ] man=%u ped=%u cand=0x%02x ego=(%u,%u,%u) cand=(%u,%u,%u,%u) tl=(c%u,t%u,cz%u,%u)",
-        (unsigned)maneuverSnap,
-        (unsigned)pedFlagSnap,
-        (unsigned)candSnap->type,
-        (unsigned)egoSnap->x,
-        (unsigned)egoSnap->y,
-        (unsigned)egoSnap->speed,
-        (unsigned)candSnap->x,
-        (unsigned)candSnap->y,
-        (unsigned)candSnap->speed,
-        (unsigned)candSnap->type,
-        (unsigned)tlSnap->color,
-        (unsigned)tlSnap->time_left,
-        (unsigned)tlSnap->cz_x,
-        (unsigned)tlSnap->cz_y);
 
-    if (maneuverSnap == MANEUVER_RIGHT_TURN) {
-        if ((candSnap->type & CAND_RT_LEFT_STRAIGHT) != 0U) {
-            DebugPrintTtcValue("egoTlTtc", calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 0U));
-        }
-    } else if (maneuverSnap == MANEUVER_LEFT_TURN_UNPROT) {
-        DebugPrintTtcValue("egoTlTtc", calculate_Ego_TTC(*egoSnap, tlSnap->cz_x, tlSnap->cz_y, 1U));
-
-        if ((candSnap->type & (CAND_LT_OPP_STRAIGHT | CAND_LT_OPP_RIGHT)) != 0U) {
-            double egoTtc = calculate_Ego_TTC(*egoSnap, candSnap->cz_x, candSnap->cz_y, 1U);
-            double candTtc = calculate_Cand_TTC(*candSnap);
-            double gap = fabs(egoTtc - candTtc);
-
-            DebugPrintTtcValue("egoCandTtc", egoTtc);
-            DebugPrintTtcValue("candTtc", candTtc);
-            DebugPrintTtcValue("gap", gap);
-        }
-    }
-
-    LOG_DEBUG(
-        " -> dec(turn=%u,ped=%u,LS=%u,OL=%u,TL=%u,OS=%u,OR=%u,mask=0x%02x,queued=%u)\n",
-        (unsigned)decision->turnState,
-        (unsigned)decision->pedestrianFlag,
-        (unsigned)decision->LStraightFlag,
-        (unsigned)decision->OppLeftFlag,
-        (unsigned)decision->tlWarningFlag,
-        (unsigned)decision->OppStraightFlag,
-        (unsigned)decision->OppRightFlag,
-        (unsigned)DecisionWarningMask(decision),
-        (unsigned)queued);
-}
 static uint8_t IsSameDicision(const Dicision *a, const Dicision *b)
 {
     if (a->turnState != b->turnState) return 0U;
@@ -769,15 +891,6 @@ static void TurnJudgeTask(void *argument)
                 (void)xSemaphoreGive(buzzerSem);
             }
 
-            TurnJudge_DebugPrint(
-                maneuverSnap,
-                pedFlagSnap,
-                &egoSnap,
-                &candSnap,
-                &tlSnap,
-                &decision,
-                decisionQueued
-            );
 
         }
     }
