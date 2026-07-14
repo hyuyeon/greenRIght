@@ -12,7 +12,8 @@
 
 #define PI_F                     3.1415926535f
 #define SPEED_STOP_THRESHOLD_MPS 0.02f
-
+#define POSITION_START_X_CM    267
+#define POSITION_START_Y_CM    10
 static float total_distance_m = 0.0f;
 static float pos_x_m = 0.0f;
 static float pos_y_m = 0.0f;
@@ -20,8 +21,8 @@ static uint32_t last_pos_time = 0;
 
 void Position_Reset(void)
 {
-    pos_x_m = 0.0f;
-    pos_y_m = 0.0f;
+	pos_x_m = (float)POSITION_START_X_CM / 100.0f;
+	pos_y_m = (float)POSITION_START_Y_CM / 100.0f;
     total_distance_m = 0.0f;
     last_pos_time = HAL_GetTick();
 }
