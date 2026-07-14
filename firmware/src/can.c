@@ -51,15 +51,7 @@ static uint8_t CAN1_WaitInitAckClear(uint32_t timeout_ms)
 
 static void CAN1_GPIO_Init_PD0_PD1(void)
 {
-    /*
-     * PA11 = CAN1_RX
-     * PA12 = CAN1_TX
-     * Alternate Function AF9
-     *
-     * 주의:
-     * PA11/PA12는 USB FS DM/DP와 겹칩니다.
-     * 현재 main.c에서 USB 초기화를 주석 처리하고 있으므로 사용 가능합니다.
-     */
+
 
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;
 
@@ -89,14 +81,11 @@ static void CAN1_GPIO_Init_PD0_PD1(void)
     GPIOD->PUPDR &= ~((3U << (0U * 2U)) | (3U << (1U * 2U)));
 
 
-    /*
-     * AFRH:
-     * PA11, PA12 -> AF9
-     */
+
     GPIOD->AFR[0] &= ~((0xFU << (0U * 4U)) |
                            (0xFU << (1U * 4U)));
 
-        GPIOD->AFR[0] |=  ((9U << (0U * 4U)) |
+    GPIOD->AFR[0] |=  ((9U << (0U * 4U)) |
                            (9U << (1U * 4U)));
 }
 
