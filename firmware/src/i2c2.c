@@ -8,6 +8,24 @@
 
 #include "i2c2.h"
 
+#define I2C2_TIMEOUT_MS  10U
+
+static uint8_t I2C2_WaitFlagSet(volatile uint32_t *reg, uint32_t flag)
+{
+    uint32_t start = HAL_GetTick();
+
+    while (((*reg) & flag) == 0U)
+    {
+        if ((uint32_t)(HAL_GetTick() - start) >= I2C2_TIMEOUT_MS)
+        {
+            I2C2_Stop();
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
 void I2C2_Init(void)
 {
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOFEN;
@@ -31,11 +49,16 @@ void I2C2_Init(void)
     I2C2->CR1 |= I2C_CR1_PE;
 }
 
-void I2C2_Start(void)
+uint8_t I2C2_Start(void)
 {
     I2C2->CR1 |= I2C_CR1_START;
-    while (!(I2C2->SR1 & I2C_SR1_SB));
+    if (!I2C2_WaitFlagSet(&I2C2->SR1, I2C_SR1_SB))
+    {
+        return 0U;
+    }
+
     (void)I2C2->SR1;
+    return 1U;
 }
 
 void I2C2_Stop(void)
@@ -43,37 +66,53 @@ void I2C2_Stop(void)
     I2C2->CR1 |= I2C_CR1_STOP;
 }
 
-void I2C2_Address(uint8_t address)
+uint8_t I2C2_Address(uint8_t address)
 {
     I2C2->DR = address;
 
-    while (!(I2C2->SR1 & I2C_SR1_ADDR));
+    if (!I2C2_WaitFlagSet(&I2C2->SR1, I2C_SR1_ADDR))
+    {
+        return 0U;
+    }
 
     (void)I2C2->SR1;
     (void)I2C2->SR2;
+    return 1U;
 }
 
-void I2C2_Write(uint8_t data)
+uint8_t I2C2_Write(uint8_t data)
 {
-    while (!(I2C2->SR1 & I2C_SR1_TXE));
+    if (!I2C2_WaitFlagSet(&I2C2->SR1, I2C_SR1_TXE))
+    {
+        return 0U;
+    }
 
     I2C2->DR = data;
+    return 1U;
 }
 
-uint8_t I2C2_Read_Ack(void)
+uint8_t I2C2_Read_Ack(uint8_t *data)
 {
     I2C2->CR1 |= I2C_CR1_ACK;
 
-    while (!(I2C2->SR1 & I2C_SR1_RXNE));
+    if (!I2C2_WaitFlagSet(&I2C2->SR1, I2C_SR1_RXNE))
+    {
+        return 0U;
+    }
 
-    return (uint8_t)I2C2->DR;
+    *data = (uint8_t)I2C2->DR;
+    return 1U;
 }
 
-uint8_t I2C2_Read_Nack(void)
+uint8_t I2C2_Read_Nack(uint8_t *data)
 {
     I2C2->CR1 &= ~I2C_CR1_ACK;
 
-    while (!(I2C2->SR1 & I2C_SR1_RXNE));
+    if (!I2C2_WaitFlagSet(&I2C2->SR1, I2C_SR1_RXNE))
+    {
+        return 0U;
+    }
 
-    return (uint8_t)I2C2->DR;
+    *data = (uint8_t)I2C2->DR;
+    return 1U;
 }
