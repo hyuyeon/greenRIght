@@ -80,6 +80,7 @@ static uint32_t blink_tick = 0;
 static int32_t used_heading_x100 = 0;
 
 static uint8_t blink_on = 0;
+static uint8_t adxl_available = 0;
 
 /* USER CODE END PV */
 
@@ -163,31 +164,17 @@ int main(void)
                    (long)(IMU_GetHeadingX100() / 100));
   }
 
-  /* ADXL345 통신 확인 */
   _uart_printf("ADXL345 Initialization...\r\n");
-
-  I2C2_Start();
-  I2C2_Address(ADXL345_ADDR_W);
-  I2C2_Write(0x00);
-
-  I2C2_Start();
-  I2C2_Address(ADXL345_ADDR_R);
-  uint8_t dev_id = I2C2_Read_Nack();
-  I2C2_Stop();
-
-  _uart_printf("Device ID Expected 229 : %d\r\n", dev_id);
-
-  if (dev_id != 229)
+  if (ADXL345_Init())
   {
-      _uart_printf("ERROR: ADXL345 I2C Failed. Check Wiring & Address.\r\n");
-      while (1)
-      {
-          HAL_Delay(1000);
-      }
+      adxl_available = 1U;
+      _uart_printf("ADXL345 Ready!\r\n");
   }
-
-  ADXL345_Init();
-  _uart_printf("ADXL345 Ready!\r\n");
+  else
+  {
+      adxl_available = 0U;
+      _uart_printf("ADXL345 disabled. Continue without accel.\r\n");
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -215,57 +202,67 @@ int main(void)
               Position_Update(current_speed_mps, used_heading_x100);
           }
       }
-      	  /*
-           * 2. ADXL345 Roll/Pitch Update + Turn State Logic
-           */
-         if ((uint32_t)(now - last_adxl_time) >= ADXL_UPDATE_PERIOD_MS)
+      /*
+          * 2. ADXL345 Roll/Pitch Update + Turn State Logic
+          */
+         if (adxl_available &&
+             ((uint32_t)(now - last_adxl_time) >= ADXL_UPDATE_PERIOD_MS))
          {
              last_adxl_time = now;
 
              int16_t ax, ay, az;
              float roll, pitch;
 
-             ADXL345_ReadXYZ(&ax, &ay, &az);
-             RollPitch_Calc(ax, ay, az, &roll, &pitch);
-
-             switch (state)
+             if (!ADXL345_ReadXYZ(&ax, &ay, &az))
              {
-                 case IDLE:
-                     GPIOA->BSRR = GPIO_BSRR_BR5 | GPIO_BSRR_BR6;
-                     blink_on = 0;
-                     break;
+                 adxl_available = 0U;
+                 state = IDLE;
+                 GPIOA->BSRR = GPIO_BSRR_BR5 | GPIO_BSRR_BR6;
+                 _uart_printf("ADXL345 read failed. Accel disabled.\r\n");
+             }
+             else
+             {
+                 RollPitch_Calc(ax, ay, az, &roll, &pitch);
 
-                 case WAIT_STEER_RIGHT:
-                     if (roll >= 40.0f)
-                     {
-                         state = WAIT_RETURN_RIGHT;
-                     }
-                     break;
+                 switch (state)
+                 {
+                     case IDLE:
+                         GPIOA->BSRR = GPIO_BSRR_BR5 | GPIO_BSRR_BR6;
+                         blink_on = 0;
+                         break;
 
-                 case WAIT_RETURN_RIGHT:
-                     if (fabsf(roll) <= 5.0f)
-                     {
+                     case WAIT_STEER_RIGHT:
+                         if (roll >= 40.0f)
+                         {
+                             state = WAIT_RETURN_RIGHT;
+                         }
+                         break;
+
+                     case WAIT_RETURN_RIGHT:
+                         if (fabsf(roll) <= 5.0f)
+                         {
+                             state = IDLE;
+                         }
+                         break;
+
+                     case WAIT_STEER_LEFT:
+                         if (roll <= -40.0f)
+                         {
+                             state = WAIT_RETURN_LEFT;
+                         }
+                         break;
+
+                     case WAIT_RETURN_LEFT:
+                         if (fabsf(roll) <= 5.0f)
+                         {
+                             state = IDLE;
+                         }
+                         break;
+
+                     default:
                          state = IDLE;
-                     }
-                     break;
-
-                 case WAIT_STEER_LEFT:
-                     if (roll <= -40.0f)
-                     {
-                         state = WAIT_RETURN_LEFT;
-                     }
-                     break;
-
-                 case WAIT_RETURN_LEFT:
-                     if (fabsf(roll) <= 5.0f)
-                     {
-                         state = IDLE;
-                     }
-                     break;
-
-                 default:
-                     state = IDLE;
-                     break;
+                         break;
+                 }
              }
          }
 
@@ -321,11 +318,20 @@ int main(void)
 
           heading = CAN_HeadingX100(used_heading_x100);
 
-          /*
-           * 아직 방향지시등 로직이 없으니 일단 OFF.
-           * 나중에 버튼/자이로 판단 결과로 CAN_TURN_RIGHT 또는 CAN_TURN_LEFT를 넣으면 됩니다.
-           */
-          turn_signal = CAN_TURN_OFF;
+          if (state == WAIT_STEER_RIGHT ||
+                  state == WAIT_RETURN_RIGHT)
+              {
+                  turn_signal = CAN_TURN_RIGHT;
+              }
+              else if (state == WAIT_STEER_LEFT ||
+                       state == WAIT_RETURN_LEFT)
+              {
+                  turn_signal = CAN_TURN_LEFT;
+              }
+              else
+              {
+                  turn_signal = CAN_TURN_OFF;
+              }
 
           timestamp = CAN_GetTimestamp12();
 
