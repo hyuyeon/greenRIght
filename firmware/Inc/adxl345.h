@@ -15,8 +15,8 @@
 #define ADXL345_ADDR_W  (0x53 << 1)
 #define ADXL345_ADDR_R  ((0x53 << 1) | 1)
 #define ADXL345_DEVID   0x00
-void ADXL345_Init(void);
-void ADXL345_ReadXYZ(int16_t *ax, int16_t *ay, int16_t *az);
+uint8_t ADXL345_Init(void);
+uint8_t ADXL345_ReadXYZ(int16_t *ax, int16_t *ay, int16_t *az);
 void RollPitch_Calc(int16_t ax, int16_t ay, int16_t az, float *roll, float *pitch);
 
 
