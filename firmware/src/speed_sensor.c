@@ -12,7 +12,7 @@
 #define PI_F                     3.1415926535f
 
 #define WHEEL_DIAMETER_CM        7.0f
-#define PULSES_PER_ROTATION      2.0f
+#define PULSES_PER_ROTATION      3.0f
 #define SPEED_SAMPLE_PERIOD_MS   1000U
 #define MARK_LOCKOUT_MS          10U
 
