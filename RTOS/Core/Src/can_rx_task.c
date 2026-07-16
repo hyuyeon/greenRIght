@@ -20,6 +20,31 @@ static CAN_Header_t rx_header;
 extern SemaphoreHandle_t turnJudgeSem;
 extern SemaphoreHandle_t tlDisplaySem;
 
+/*
+ * updateMask is interpreted per message payload. A cleared bit means that
+ * the receiver must retain the previously accepted value for that field.
+ */
+#define EGO_UPD_SPEED          (1U << 0)
+#define EGO_UPD_X              (1U << 1)
+#define EGO_UPD_Y              (1U << 2)
+#define EGO_UPD_HEADING        (1U << 3)
+
+#define CAND_INTRO_UPD_TYPE    (1U << 0)
+#define CAND_INTRO_UPD_CZ_X    (1U << 1)
+#define CAND_INTRO_UPD_CZ_Y    (1U << 2)
+
+#define CAND_STATUS_UPD_TYPE   (1U << 0)
+#define CAND_STATUS_UPD_SPEED  (1U << 1)
+#define CAND_STATUS_UPD_X      (1U << 2)
+#define CAND_STATUS_UPD_Y      (1U << 3)
+
+#define TL_UPD_TYPE            (1U << 0)
+#define TL_UPD_COLOR           (1U << 1)
+#define TL_UPD_TIME_LEFT       (1U << 2)
+#define TL_UPD_CZ_X            (1U << 3)
+#define TL_UPD_CZ_Y            (1U << 4)
+#define TL_UPD_MANEUVER        (1U << 5)
+
 static uint8_t CAN_Rx(uint16_t *can_id, CAN_Header_t *header, uint64_t *frame_out);
 static void CanRxTask(void *argument);
 static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header);
@@ -187,12 +212,27 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
     {
     case 0x0:
     {
+        uint8_t mask = header->updateMask;
 
         taskENTER_CRITICAL();
-        ego.speed = (uint8_t)((frame >> 32) & 0xFFU);
-        ego.x = (uint16_t)((frame >> 22) & 0x03FFU);
-        ego.y = (uint16_t)((frame >> 11) & 0x07FFU);
-        ego.heading = (uint16_t)((frame >> 2) & 0x01FFU);
+        if ((mask & EGO_UPD_SPEED) != 0U)
+        {
+            ego.speed = (uint8_t)((frame >> 32) & 0xFFU);
+        }
+        if ((mask & EGO_UPD_X) != 0U)
+        {
+            ego.x = (uint16_t)((frame >> 22) & 0x03FFU);
+        }
+        if ((mask & EGO_UPD_Y) != 0U)
+        {
+            ego.y = (uint16_t)((frame >> 11) & 0x07FFU);
+        }
+        if ((mask & EGO_UPD_HEADING) != 0U)
+        {
+            ego.heading = (uint16_t)((frame >> 2) & 0x01FFU);
+        }
+
+        /* A heartbeat still advances the source freshness timestamp. */
         ego.timestamp = header->timestamp;
         taskEXIT_CRITICAL();
         break;
@@ -201,11 +241,21 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
     case 0x4:
     {
         CandidateVehicle candSnap;
+        uint8_t mask = header->updateMask;
 
         taskENTER_CRITICAL();
-        candidateVehicle.type = (uint8_t)((frame >> 32) & 0xFFU);
-        candidateVehicle.cz_x = (uint16_t)((frame >> 22) & 0x03FFU);
-        candidateVehicle.cz_y = (uint16_t)((frame >> 11) & 0x07FFU);
+        if ((mask & CAND_INTRO_UPD_TYPE) != 0U)
+        {
+            candidateVehicle.type = (uint8_t)((frame >> 32) & 0xFFU);
+        }
+        if ((mask & CAND_INTRO_UPD_CZ_X) != 0U)
+        {
+            candidateVehicle.cz_x = (uint16_t)((frame >> 22) & 0x03FFU);
+        }
+        if ((mask & CAND_INTRO_UPD_CZ_Y) != 0U)
+        {
+            candidateVehicle.cz_y = (uint16_t)((frame >> 11) & 0x07FFU);
+        }
         candSnap = candidateVehicle;
         taskEXIT_CRITICAL();
 
@@ -215,28 +265,48 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
 
     case 0x5:
     {
+        uint8_t mask = header->updateMask;
         uint8_t type = (uint8_t)((frame >> 32) & 0xFFU);
+        uint32_t receivedTick = HAL_GetTick();
 
         taskENTER_CRITICAL();
-        if (type == CAND_NONE)
+        if (((mask & CAND_STATUS_UPD_TYPE) != 0U) &&
+            (type == CAND_NONE))
         {
             memset(&candidateVehicle, 0, sizeof(candidateVehicle));
+            candidateVehicle.timestamp_ms = header->timestamp;
+            candidateVehicle.received_timestamp = receivedTick;
         }
-        else if (type == CAND_COMM_ERROR)
+        else if (((mask & CAND_STATUS_UPD_TYPE) != 0U) &&
+                 (type == CAND_COMM_ERROR))
         {
             memset(&candidateVehicle, 0, sizeof(candidateVehicle));
             candidateVehicle.type = CAND_COMM_ERROR;
             candidateVehicle.timestamp_ms = header->timestamp;
-            candidateVehicle.received_timestamp = HAL_GetTick();
+            candidateVehicle.received_timestamp = receivedTick;
         }
         else
         {
-            candidateVehicle.type = type;
-            candidateVehicle.speed = (uint8_t)((frame >> 24) & 0xFFU);
-            candidateVehicle.x = (uint16_t)((frame >> 14) & 0x03FFU);
-            candidateVehicle.y = (uint16_t)((frame >> 3) & 0x07FFU);
+            if ((mask & CAND_STATUS_UPD_TYPE) != 0U)
+            {
+                candidateVehicle.type = type;
+            }
+            if ((mask & CAND_STATUS_UPD_SPEED) != 0U)
+            {
+                candidateVehicle.speed = (uint8_t)((frame >> 24) & 0xFFU);
+            }
+            if ((mask & CAND_STATUS_UPD_X) != 0U)
+            {
+                candidateVehicle.x = (uint16_t)((frame >> 14) & 0x03FFU);
+            }
+            if ((mask & CAND_STATUS_UPD_Y) != 0U)
+            {
+                candidateVehicle.y = (uint16_t)((frame >> 3) & 0x07FFU);
+            }
+
+            /* A valid status heartbeat refreshes communication freshness. */
             candidateVehicle.timestamp_ms = header->timestamp;
-            candidateVehicle.received_timestamp = HAL_GetTick();
+            candidateVehicle.received_timestamp = receivedTick;
         }
         taskEXIT_CRITICAL();
         giveJudge = 1U;
@@ -245,6 +315,7 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
 
     case 0x6:
     {
+        uint8_t mask = header->updateMask;
         uint8_t tl_type_mask = (uint8_t)((frame >> 32) & 0xFFU);
         uint8_t raw_color = (uint8_t)((frame >> 30) & 0x03U);
         uint8_t new_time_left = (uint8_t)((frame >> 26) & 0x0FU);
@@ -253,7 +324,8 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
         uint8_t new_maneuver = (uint8_t)((frame >> 3) & 0x03U);
         uint8_t new_color = raw_color;
 
-        if (tl_type_mask == 0U)
+        if (((mask & TL_UPD_TYPE) != 0U) &&
+            (tl_type_mask == TL_NONE))
         {
             new_color = 255U;
         }
@@ -261,20 +333,52 @@ static void CanRx_HandleFrame(uint64_t frame, const CAN_Header_t *header)
         taskENTER_CRITICAL();
         uint8_t prev_maneuver = (uint8_t)maneuver;
 
-        if ((tl.type != tl_type_mask) || (tl.color != new_color) || (tl.time_left != new_time_left))
+        if ((((mask & TL_UPD_TYPE) != 0U) && (tl.type != tl_type_mask)) ||
+            (((mask & TL_UPD_TYPE) != 0U) &&
+             (tl_type_mask == TL_NONE) &&
+             ((tl.color != 255U) || (tl.time_left != 0U))) ||
+            (((mask & TL_UPD_COLOR) != 0U) && (tl.color != new_color)) ||
+            (((mask & TL_UPD_TIME_LEFT) != 0U) &&
+             (tl.time_left != new_time_left)))
         {
             giveTlDisplay = 1U;
         }
 
-        tl.type = tl_type_mask;
-        tl.color = new_color;
-        tl.time_left = new_time_left;
-        tl.cz_x = new_cz_x;
-        tl.cz_y = new_cz_y;
-        maneuver = (int8_t)new_maneuver;
+        if ((mask & TL_UPD_TYPE) != 0U)
+        {
+            tl.type = tl_type_mask;
+
+            /* TL_NONE semantically invalidates the previous color. */
+            if (tl_type_mask == TL_NONE)
+            {
+                tl.color = 255U;
+                tl.time_left = 0U;
+            }
+        }
+        if ((mask & TL_UPD_COLOR) != 0U)
+        {
+            tl.color = new_color;
+        }
+        if ((mask & TL_UPD_TIME_LEFT) != 0U)
+        {
+            tl.time_left = new_time_left;
+        }
+        if ((mask & TL_UPD_CZ_X) != 0U)
+        {
+            tl.cz_x = new_cz_x;
+        }
+        if ((mask & TL_UPD_CZ_Y) != 0U)
+        {
+            tl.cz_y = new_cz_y;
+        }
+        if ((mask & TL_UPD_MANEUVER) != 0U)
+        {
+            maneuver = (int8_t)new_maneuver;
+        }
         taskEXIT_CRITICAL();
 
-        if ((new_maneuver == MANEUVER_STRAIGHT) &&
+        if (((mask & TL_UPD_MANEUVER) != 0U) &&
+            (new_maneuver == MANEUVER_STRAIGHT) &&
             ((prev_maneuver == MANEUVER_RIGHT_TURN) ||
              (prev_maneuver == MANEUVER_LEFT_TURN_UNPROT)))
         {
@@ -337,4 +441,3 @@ void CAN1_RX0_IRQHandler(void)
 
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
-
