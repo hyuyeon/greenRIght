@@ -81,7 +81,15 @@ static int32_t used_heading_x100 = 0;
 
 static uint8_t blink_on = 0;
 static uint8_t adxl_available = 0;
+/* 마지막으로 CAN 송신에 성공한 값 */
+static uint8_t previous_speed_mpm = 0U;
+static uint16_t previous_x = 0U;
+static uint16_t previous_y = 0U;
+static uint16_t previous_heading = 0U;
+static uint8_t previous_turn_signal = CAN_TURN_OFF;
 
+/* 최초 프레임은 모든 필드를 갱신 */
+static uint8_t can_first_tx = 1U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -293,56 +301,113 @@ int main(void)
              GPIOA->BSRR = GPIO_BSRR_BR5 | GPIO_BSRR_BR6;
          }
 
-      if ((uint32_t)(now - last_can_time) >= CAN_TX_PERIOD_MS)
-      {
-          last_can_time = now;
+         if ((uint32_t)(now - last_can_time) >= CAN_TX_PERIOD_MS)
+         {
+             float speed_mps;
+             uint8_t speed_mpm;
+             uint16_t x;
+             uint16_t y;
+             uint16_t heading;
+             uint8_t turn_signal;
+             uint16_t timestamp;
+             uint8_t update_mask;
+             uint8_t tx_success;
 
-          float speed_mps = Speed_GetMps();
+             last_can_time = now;
 
-          uint8_t speed_mpm;
-          uint16_t x;
-          uint16_t y;
-          uint16_t heading;
-          uint8_t turn_signal;
-          uint16_t timestamp;
+             speed_mps = Speed_GetMps();
+             speed_mpm = CAN_SpeedMpsToMpm8(speed_mps);
 
-          speed_mpm = CAN_SpeedMpsToMpm8(speed_mps);
+             /*
+              * 현재 Position_GetXcm(), Position_GetYcm()는 cm 단위입니다.
+              * 프로토콜 범위에 맞게 제한합니다.
+              */
+             x = CAN_ClampU16(Position_GetXcm(), 0U, 1023U);
+             y = CAN_ClampU16(Position_GetYcm(), 0U, 2047U);
 
-          /*
-           * 현재 Position_GetXcm(), Position_GetYcm()는 cm 단위입니다.
-           * 프로토콜 x/y가 map 좌표계라면 여기서 map offset/scale을 적용해야 합니다.
-           * 일단은 0~1023, 0~2047 범위로 clamp합니다.
-           */
-          x = CAN_ClampU16(Position_GetXcm(), 0U, 1023U);
-          y = CAN_ClampU16(Position_GetYcm(), 0U, 2047U);
+             heading = CAN_HeadingX100(used_heading_x100);
 
-          heading = CAN_HeadingX100(used_heading_x100);
+             if ((state == WAIT_STEER_RIGHT) ||
+                 (state == WAIT_RETURN_RIGHT))
+             {
+                 turn_signal = CAN_TURN_RIGHT;
+             }
+             else if ((state == WAIT_STEER_LEFT) ||
+                      (state == WAIT_RETURN_LEFT))
+             {
+                 turn_signal = CAN_TURN_LEFT;
+             }
+             else
+             {
+                 turn_signal = CAN_TURN_OFF;
+             }
 
-          if (state == WAIT_STEER_RIGHT ||
-                  state == WAIT_RETURN_RIGHT)
-              {
-                  turn_signal = CAN_TURN_RIGHT;
-              }
-              else if (state == WAIT_STEER_LEFT ||
-                       state == WAIT_RETURN_LEFT)
-              {
-                  turn_signal = CAN_TURN_LEFT;
-              }
-              else
-              {
-                  turn_signal = CAN_TURN_OFF;
-              }
+             /*
+              * 최초 송신은 Linux에 기준 상태가 없으므로 전체 갱신합니다.
+              */
+             if (can_first_tx)
+             {
+                 update_mask = CAN_UPDATE_ALL;
+             }
+             else
+             {
+                 update_mask = 0U;
 
-          timestamp = CAN_GetTimestamp12();
+                 if (speed_mpm != previous_speed_mpm)
+                 {
+                     update_mask |= CAN_UPDATE_SPEED;
+                 }
 
-          CAN_SendEgoStatus0000(timestamp,
-                                CAN_UPDATE_ALL,
-                                speed_mpm,
-                                x,
-                                y,
-                                heading,
-                                turn_signal);
-      }
+                 if (x != previous_x)
+                 {
+                     update_mask |= CAN_UPDATE_X;
+                 }
+
+                 if (y != previous_y)
+                 {
+                     update_mask |= CAN_UPDATE_Y;
+                 }
+
+                 if (heading != previous_heading)
+                 {
+                     update_mask |= CAN_UPDATE_HEADING;
+                 }
+
+                 if (turn_signal != previous_turn_signal)
+                 {
+                     update_mask |= CAN_UPDATE_TURN_SIGNAL;
+                 }
+             }
+
+             timestamp = CAN_GetTimestamp12();
+
+             /*
+              * update_mask가 0이어도 송신합니다.
+              * Linux는 상태를 덮어쓰지 않지만 프레임 수신 시각을 통해
+              * 통신 freshness를 유지할 수 있습니다.
+              */
+             tx_success = CAN_SendEgoStatus0000(timestamp,
+                                               update_mask,
+                                               speed_mpm,
+                                               x,
+                                               y,
+                                               heading,
+                                               turn_signal);
+
+             /*
+              * 실제 CAN 메일박스 등록에 성공했을 때만 이전 값을 갱신합니다.
+              * 송신 실패 시 다음 주기에 동일 변경사항을 다시 전송합니다.
+              */
+             if (tx_success)
+             {
+                 previous_speed_mpm = speed_mpm;
+                 previous_x = x;
+                 previous_y = y;
+                 previous_heading = heading;
+                 previous_turn_signal = turn_signal;
+                 can_first_tx = 0U;
+             }
+         }
 
       /*
        * UART 출력은 느리므로 200ms마다만 출력합니다.
