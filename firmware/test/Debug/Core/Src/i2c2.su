@@ -1,0 +1,8 @@
+../Core/Src/i2c2.c:13:16:I2C2_WaitFlagSet	24	static
+../Core/Src/i2c2.c:29:6:I2C2_Init	4	static
+../Core/Src/i2c2.c:52:9:I2C2_Start	8	static
+../Core/Src/i2c2.c:64:6:I2C2_Stop	4	static
+../Core/Src/i2c2.c:69:9:I2C2_Address	16	static
+../Core/Src/i2c2.c:83:9:I2C2_Write	16	static
+../Core/Src/i2c2.c:94:9:I2C2_Read_Ack	16	static
+../Core/Src/i2c2.c:107:9:I2C2_Read_Nack	16	static

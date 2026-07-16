@@ -1,0 +1,5 @@
+../Core/Src/adxl345.c:31:16:ADXL345_WriteReg	24	static
+../Core/Src/adxl345.c:52:16:ADXL345_ReadReg	16	static
+../Core/Src/adxl345.c:65:9:ADXL345_Init	16	static
+../Core/Src/adxl345.c:85:9:ADXL345_ReadXYZ	32	static
+../Core/Src/adxl345.c:111:6:RollPitch_Calc	32	static

@@ -1,0 +1,12 @@
+../Core/Src/can.c:26:16:CAN1_WaitInitAckSet	3
+../Core/Src/can.c:39:16:CAN1_WaitInitAckClear	3
+../Core/Src/can.c:52:13:CAN1_GPIO_Init_PD0_PD1	1
+../Core/Src/can.c:92:9:CAN1_Init_500kbps	3
+../Core/Src/can.c:147:9:CAN1_IsTxReady	2
+../Core/Src/can.c:155:9:CAN1_SendData	7
+../Core/Src/can.c:234:6:CAN_PackEgoStatus0000	1
+../Core/Src/can.c:285:9:CAN_SendEgoStatus0000	1
+../Core/Src/can.c:307:10:CAN_GetTimestamp12	1
+../Core/Src/can.c:316:9:CAN_SpeedMpsToMpm8	4
+../Core/Src/can.c:340:10:CAN_HeadingX100	4
+../Core/Src/can.c:362:10:CAN_ClampU16	3

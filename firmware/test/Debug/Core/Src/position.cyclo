@@ -1,0 +1,5 @@
+../Core/Src/position.c:22:6:Position_Reset	1
+../Core/Src/position.c:30:6:Position_Update	3
+../Core/Src/position.c:58:9:Position_GetXcm	1
+../Core/Src/position.c:63:9:Position_GetYcm	1
+../Core/Src/position.c:68:9:Position_GetTotalDistanceCm	1
