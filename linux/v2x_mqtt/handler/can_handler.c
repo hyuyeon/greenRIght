@@ -27,6 +27,11 @@
 
 static void sleep_ms(long ms) { struct timespec ts = { ms / 1000, (ms % 1000) * 1000000L }; nanosleep(&ts, NULL); }
 
+static uint16_t timestamp12_from_ms(uint64_t timestamp_ms)
+{
+    return (uint16_t)(timestamp_ms & TS_MASK);
+}
+
 static void emit_ego(CanHandler* handler, const EgoVehicle* ego)
 {
     if (handler && ego && handler->callbacks.on_ego) handler->callbacks.on_ego(ego, handler->callbacks.user_data);
@@ -138,11 +143,11 @@ bool can_handler_poll(CanHandler* handler, int timeout_ms)
 #endif
 }
 
-static bool send_frame(CanHandler* handler, uint8_t message_id, uint64_t timestamp_epoch_ms, uint64_t payload48)
+static bool send_frame(CanHandler* handler, uint8_t message_id, uint16_t timestamp12, uint64_t payload48)
 {
     if (!handler || !handler->initialized) return false;
     uint64_t raw = ((uint64_t)(message_id & 0xFu) << 60) |
-                   ((timestamp_epoch_ms & TS_MASK) << 48) |
+                   ((uint64_t)(timestamp12 & TS_MASK) << 48) |
                    (payload48 & 0xFFFFFFFFFFFFULL);
     if (handler->mock_mode && handler->fd < 0) return true;
 #ifndef __linux__
@@ -162,21 +167,22 @@ bool can_handler_send_ntp_sync(CanHandler* handler)
 {
     uint64_t epoch_ms = ntp_time_sync_epoch_ms();
     uint64_t payload = ((epoch_ms & 0xFFFFFFFFFFULL) << 8) | (uint8_t)ntp_time_get_sync_status();
-    return send_frame(handler, MSG_NTP_SYNC, epoch_ms, payload);
+    return send_frame(handler, MSG_NTP_SYNC, timestamp12_from_ms(epoch_ms), payload);
 }
 
 bool can_handler_send_candidate_vehicle_intro(CanHandler* handler, uint8_t type, uint16_t x, uint16_t y, uint64_t timestamp)
 {
     uint64_t payload = ((uint64_t)type << 32) | ((uint64_t)(x & 0x3FFu) << 22) | ((uint64_t)(y & 0x7FFu) << 11);
-    return send_frame(handler, MSG_CANDIDATE_INTRO, timestamp, payload);
+    return send_frame(handler, MSG_CANDIDATE_INTRO, timestamp12_from_ms(timestamp), payload);
 }
 
 bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type, const VehicleInfo* vehicle)
 {
     uint8_t speed = vehicle ? vehicle->speed : 0;
     uint16_t x = vehicle ? vehicle->x : 0, y = vehicle ? vehicle->y : 0, heading = vehicle ? vehicle->heading : 0;
+    uint64_t source_timestamp_ms = vehicle ? vehicle->timestamp_ms : ntp_time_sync_epoch_ms();
     uint64_t payload = ((uint64_t)type << 40) | ((uint64_t)speed << 32) | ((uint64_t)(x & 0x3FFu) << 22) | ((uint64_t)(y & 0x7FFu) << 11) | ((uint64_t)(heading & 0x1FFu) << 2);
-    return send_frame(handler, MSG_CANDIDATE_STATUS, vehicle ? vehicle->timestamp_ms : ntp_time_sync_epoch_ms(), payload);
+    return send_frame(handler, MSG_CANDIDATE_STATUS, timestamp12_from_ms(source_timestamp_ms), payload);
 }
 
 bool can_handler_send_no_candidate_vehicle(CanHandler* handler) { return can_handler_send_candidate_vehicle_status(handler, 0x00u, NULL); }
@@ -192,7 +198,8 @@ bool can_handler_send_traffic_light(CanHandler* handler, uint8_t tl_id, const Tr
         ((uint64_t)(x & 0x3FFu)             << 16) |
         ((uint64_t)(y & 0x7FFu)             << 5)  |
         ((uint64_t)(maneuver & 0x3u)        << 3);
-    return send_frame(handler, MSG_TRAFFIC_LIGHT, tl ? tl->timestamp_ms : ntp_time_sync_epoch_ms(), payload);
+    uint64_t source_timestamp_ms = tl ? tl->timestamp_ms : ntp_time_sync_epoch_ms();
+    return send_frame(handler, MSG_TRAFFIC_LIGHT, timestamp12_from_ms(source_timestamp_ms), payload);
 }
 
 bool can_handler_send_no_traffic_light(CanHandler* h, uint16_t x, uint16_t y, uint8_t m) { return can_handler_send_traffic_light(h, 0x00u, NULL, x, y, m); }
