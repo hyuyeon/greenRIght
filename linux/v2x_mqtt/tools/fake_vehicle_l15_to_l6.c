@@ -14,6 +14,7 @@
 #include "self_vehicle_manager.h"
 #include "types.h"
 #include "vehicle_codec.h"
+#include "ntp_time.h"
 
 #define DEFAULT_VEHICLE_ID 2
 #define DEFAULT_SPEED 30
@@ -144,7 +145,7 @@ int main(int argc, char** argv)
         EgoVehicle ego;
         VehicleInfo vehicle;
         fill_ego(&ego, x);
-        self_vehicle_manager_update_from_can(&self_manager, &map_service, &ego);
+        self_vehicle_manager_update_from_can(&self_manager, &map_service, &ego, ntp_time_sync_epoch_ms());
         if (self_vehicle_manager_get_info(&self_manager, &vehicle)) {
             publish_vehicle(mqtt, topic, &vehicle);
         }

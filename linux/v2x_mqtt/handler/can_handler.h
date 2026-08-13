@@ -31,7 +31,12 @@ bool can_handler_init(
 );
 void can_handler_cleanup(CanHandler* handler);
 bool can_handler_poll(CanHandler* handler, int timeout_ms);
-bool can_handler_send_candidate_vehicle_intro(CanHandler* handler, uint8_t type_mask, uint16_t cz_x, uint16_t cz_y);
+/* 0010: Linux-to-RTOS time reference; payload contains 40-bit epoch milliseconds. */
+bool can_handler_send_ntp_sync(CanHandler* handler);
+bool can_handler_send_candidate_vehicle_intro(
+    CanHandler* handler, uint8_t type_mask, uint16_t cz_x, uint16_t cz_y,
+    uint64_t timestamp_epoch_ms
+);
 bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type_mask, const VehicleInfo* candidate);
 bool can_handler_send_no_candidate_vehicle(CanHandler* handler);
 bool can_handler_send_candidate_vehicle_unavailable(CanHandler* handler);

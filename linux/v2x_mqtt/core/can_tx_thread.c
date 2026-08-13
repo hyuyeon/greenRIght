@@ -6,9 +6,10 @@
 #include <string.h>
 #include <time.h>
 
-#define CANDIDATE_TX_PERIOD_MS 50
-#define CANDIDATE_STATUS_TX_REAL_PERIOD_MS 1000
-#define TRAFFIC_LIGHT_TX_REAL_PERIOD_MS 300
+#define CAN_TX_TICK_MS 10
+#define CANDIDATE_STATUS_TX_PERIOD_MS 20
+#define TRAFFIC_LIGHT_TX_PERIOD_MS 300
+#define NTP_SYNC_TX_PERIOD_MS 100
 #define CANDIDATE_ID_NONE VEHICLE_ID_NONE
 #define TYPE_MASK_NONE 0
 #define TYPE_MASK_RIGHT_VS_STRAIGHT 1
@@ -255,15 +256,18 @@ static void* can_tx_thread_main(void* arg)
     bool last_active = false;
     bool last_had_candidate = false;
     uint8_t last_intro_vehicle_id = CANDIDATE_ID_NONE;
-    uint32_t candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
-    uint32_t traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
+    uint32_t candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_PERIOD_MS;
+    uint32_t traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_PERIOD_MS / 2;
+    uint32_t ntp_sync_elapsed_ms = NTP_SYNC_TX_PERIOD_MS;
 
     while (atomic_load(&context->running)) {
+        if (ntp_sync_elapsed_ms >= NTP_SYNC_TX_PERIOD_MS) {
+            can_handler_send_ntp_sync(&context->can);
+            ntp_sync_elapsed_ms = 0;
+        }
         bool active = atomic_load(&context->candidate_vehicle_tx_enabled);
-        bool status_due = !context->can_tx_real ||
-            candidate_status_elapsed_ms >= CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
-        bool traffic_light_due = !context->can_tx_real ||
-            traffic_light_elapsed_ms >= TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
+        bool status_due = candidate_status_elapsed_ms >= CANDIDATE_STATUS_TX_PERIOD_MS;
+        bool traffic_light_due = traffic_light_elapsed_ms >= TRAFFIC_LIGHT_TX_PERIOD_MS;
         VehicleInfo self;
         CandidateSelection selection;
         memset(&self, 0, sizeof(self));
@@ -279,16 +283,17 @@ static void* can_tx_thread_main(void* arg)
                 last_active = false;
                 last_had_candidate = false;
                 last_intro_vehicle_id = CANDIDATE_ID_NONE;
-                candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
+                candidate_status_elapsed_ms = 0;
             }
 
             if (traffic_light_due) {
                 send_candidate_traffic_light(context, has_self ? &self : NULL, NULL);
                 traffic_light_elapsed_ms = 0;
             }
-            sleep_ms(CANDIDATE_TX_PERIOD_MS);
-            candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
-            traffic_light_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
+            sleep_ms(CAN_TX_TICK_MS);
+            candidate_status_elapsed_ms += CAN_TX_TICK_MS;
+            traffic_light_elapsed_ms += CAN_TX_TICK_MS;
+            ntp_sync_elapsed_ms += CAN_TX_TICK_MS;
             continue;
         }
 
@@ -297,10 +302,10 @@ static void* can_tx_thread_main(void* arg)
             last_active = true;
             last_had_candidate = false;
             last_intro_vehicle_id = CANDIDATE_ID_NONE;
-            candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_REAL_PERIOD_MS;
-            traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_REAL_PERIOD_MS;
+            candidate_status_elapsed_ms = CANDIDATE_STATUS_TX_PERIOD_MS;
+            traffic_light_elapsed_ms = TRAFFIC_LIGHT_TX_PERIOD_MS / 2;
             status_due = true;
-            traffic_light_due = true;
+            traffic_light_due = false;
         }
 
         bool mqtt_connected = mqtt_handler_is_connected(&context->mqtt);
@@ -323,7 +328,8 @@ static void* can_tx_thread_main(void* arg)
                         &context->can,
                         selection.type_mask,
                         selection.conflict_zone_center_x,
-                        selection.conflict_zone_center_y
+                        selection.conflict_zone_center_y,
+                        selection.vehicle.timestamp_ms
                     );
                     last_intro_vehicle_id = selection.vehicle.vehicle_id;
                     status_due = true;
@@ -356,9 +362,10 @@ static void* can_tx_thread_main(void* arg)
             send_candidate_traffic_light(context, has_self ? &self : NULL, has_candidate ? &selection : NULL);
             traffic_light_elapsed_ms = 0;
         }
-        sleep_ms(CANDIDATE_TX_PERIOD_MS);
-        candidate_status_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
-        traffic_light_elapsed_ms += CANDIDATE_TX_PERIOD_MS;
+        sleep_ms(CAN_TX_TICK_MS);
+        candidate_status_elapsed_ms += CAN_TX_TICK_MS;
+        traffic_light_elapsed_ms += CAN_TX_TICK_MS;
+        ntp_sync_elapsed_ms += CAN_TX_TICK_MS;
     }
     return NULL;
 }

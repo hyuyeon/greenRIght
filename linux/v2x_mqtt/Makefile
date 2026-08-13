@@ -21,6 +21,7 @@ SRCS = \
     manager/self_vehicle_manager.c \
     manager/other_vehicle_manager.c \
     manager/traffic_light_manager.c \
+    common/ntp_time.c \
     common/vehicle_codec.c \
     map/IntersectionMap.c
 
@@ -36,7 +37,7 @@ $(TARGET): $(SRCS) | $(BIN_DIR)
 
 fake_vehicle_l15_to_l6: $(FAKE_VEHICLE_TARGET)
 
-$(FAKE_VEHICLE_TARGET): tools/fake_vehicle_l15_to_l6.c common/vehicle_codec.c service/map_service.c manager/self_vehicle_manager.c map/IntersectionMap.c | $(BIN_DIR)
+$(FAKE_VEHICLE_TARGET): tools/fake_vehicle_l15_to_l6.c common/ntp_time.c common/vehicle_codec.c service/map_service.c manager/self_vehicle_manager.c map/IntersectionMap.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:

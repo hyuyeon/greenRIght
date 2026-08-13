@@ -1,11 +1,12 @@
 #include "can_rx_thread.h"
+#include "ntp_time.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
 #include <time.h>
 
-#define CAN_POLL_TIMEOUT_MS 100
-#define CAN_RECONNECT_DELAY_MS 1000
+#define CAN_POLL_TIMEOUT_MS 20
+#define CAN_RECONNECT_DELAY_MS 500
 
 static void sleep_ms(long ms)
 {
@@ -60,7 +61,13 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
     TurnState next = decide_turn_state(current, ego, &map_context);
     self_vehicle_manager_set_turn_state(&context->self, next);
 
-    self_vehicle_manager_update_from_can(&context->self, &context->map, ego);
+    uint64_t timestamp_epoch_ms = ntp_time_reconstruct(ego->timestamp, ntp_time_sync_epoch_ms());
+    self_vehicle_manager_update_from_can(&context->self, &context->map, ego, timestamp_epoch_ms);
+
+    VehicleInfo self;
+    if (self_vehicle_manager_get_info(&context->self, &self)) {
+        (void)mqtt_handler_publish_vehicle_info(&context->mqtt, &self);
+    }
 
     bool was_candidate_mode =
         current == TURN_STATE_RIGHT_TURN ||
