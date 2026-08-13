@@ -66,7 +66,7 @@ cJSON *vehicle_info_to_json(const VehicleInfo *v)
     
     cJSON_AddNumberToObject(root,
                         "timestamp_ms",
-                        (double)tl->timestamp_ms);
+                        (double)v->timestamp_ms);
 
     return root;
 }
