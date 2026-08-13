@@ -1,5 +1,6 @@
 #include "can_rx_thread.h"
 #include "ntp_time.h"
+#include "vehicle_publish_queue.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -66,7 +67,7 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
 
     VehicleInfo self;
     if (self_vehicle_manager_get_info(&context->self, &self)) {
-        (void)mqtt_handler_publish_vehicle_info(&context->mqtt, &self);
+    vehicle_publish_queue_push(&context->self_publish_queue, &self);
     }
 
     bool was_candidate_mode =
