@@ -1,5 +1,7 @@
 ﻿#include "turnJudgeTask.h"
 #include "debug_uart.h"
+#include "temporal_qos.h"
+#include "time_sync.h"
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
@@ -796,6 +798,49 @@ static void TurnJudgeTask(void *argument)
                 tlSnap = tl;
             }
             taskEXIT_CRITICAL();
+
+#if (TEMPORAL_QOS_TRACE_STAGE_ENABLE == 1U)
+            /*
+             * T5: another vehicle's candidate data is about to be used
+             * for collision judgement on this RTOS.
+             */
+            if ((candSnap.type != CAND_NONE) &&
+                (candSnap.type != CAND_COMM_ERROR))
+            {
+                uint64_t currentTimeMs;
+                uint16_t currentTimestamp;
+                uint16_t sourceTimestamp;
+                uint16_t latencyMs;
+
+                sourceTimestamp = (uint16_t)(
+                    candSnap.timestamp_ms &
+                    TEMPORAL_QOS_TIMESTAMP_MASK
+                );
+
+                if (TimeSync_GetCurrentMs(&currentTimeMs) != 0U)
+                {
+                    currentTimestamp = (uint16_t)(
+                        currentTimeMs & TEMPORAL_QOS_TIMESTAMP_MASK
+                    );
+
+                    TemporalQos_TraceStage(5U, sourceTimestamp);
+
+                    latencyMs = TemporalQos_CalculateAgeMs(
+                        currentTimestamp,
+                        sourceTimestamp
+                    );
+
+                    Uart3_Printf(
+                        "[QoS] End-to-End latency: %u ms\r\n",
+                        (unsigned)latencyMs
+                    );
+                }
+                else
+                {
+                    TemporalQos_TraceStage(5U, sourceTimestamp);
+                }
+            }
+#endif
 
             memset(&decision, 0, sizeof(decision));
 
