@@ -31,6 +31,23 @@
 #define UPD_BIT_TURN_SIGNAL (1u << 4)
 
 #define CAN_TX_ARBITRATION_ID 0x321
+#define CAN_TIMESTAMP_MASK    0x0FFFu
+#define CAN_PAYLOAD48_MASK    0xFFFFFFFFFFFFULL
+
+static uint16_t can_handler_current_timestamp12(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        return 0u;
+    }
+
+    uint64_t current_ms =
+        ((uint64_t)ts.tv_sec * 1000ULL) +
+        ((uint64_t)ts.tv_nsec / 1000000ULL);
+
+    return (uint16_t)(current_ms & CAN_TIMESTAMP_MASK);
+}
 
 #ifdef __linux__
 static void emit_ego(CanHandler* handler, const EgoVehicle* ego)
@@ -266,17 +283,19 @@ bool can_handler_poll(CanHandler* handler, int timeout_ms)
 #endif
 }
 
-static bool can_handler_send_raw_frame(CanHandler* handler, uint8_t message_id, uint8_t update_mask, uint64_t payload40)
+static bool can_handler_send_raw_frame(
+    CanHandler* handler,
+    uint8_t message_id,
+    uint16_t timestamp12,
+    uint64_t payload48
+)
 {
     if (!handler || !handler->initialized) return false;
 
-    static uint16_t tx_timestamp = 0;
-    tx_timestamp = (uint16_t)((tx_timestamp + 1u) & 0x0FFFu);
     uint64_t raw = 0;
     raw |= ((uint64_t)message_id & 0x0Fu) << 60;
-    raw |= ((uint64_t)tx_timestamp & 0x0FFFu) << 48;
-    raw |= ((uint64_t)update_mask & 0xFFu) << 40;
-    raw |= payload40 & 0xFFFFFFFFFFULL;
+    raw |= ((uint64_t)timestamp12 & CAN_TIMESTAMP_MASK) << 48;
+    raw |= payload48 & CAN_PAYLOAD48_MASK;
 
     if (handler->mock_mode && handler->fd < 0) {
         return true;
@@ -311,8 +330,12 @@ bool can_handler_send_candidate_vehicle_intro(CanHandler* handler, uint8_t type_
     payload |= ((uint64_t)(cz_x & 0x03FFu)) << 22;
     payload |= ((uint64_t)(cz_y & 0x07FFu)) << 11;
 
-    uint8_t update_mask = 0x07;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_INTRO, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_FILTERED_INTRO,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }
 
 bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type_mask, const VehicleInfo* candidate)
@@ -322,28 +345,41 @@ bool can_handler_send_candidate_vehicle_status(CanHandler* handler, uint8_t type
     }
 
     uint64_t payload = 0;
-    payload |= ((uint64_t)(type_mask & 0xFFu)) << 32;
-    payload |= ((uint64_t)(candidate->speed & 0xFFu)) << 24;
-    payload |= ((uint64_t)(candidate->x & 0x03FFu)) << 14;
-    payload |= ((uint64_t)(candidate->y & 0x07FFu)) << 3;
+    payload |= ((uint64_t)(type_mask & 0xFFu)) << 40;
+    payload |= ((uint64_t)(candidate->speed & 0xFFu)) << 32;
+    payload |= ((uint64_t)(candidate->x & 0x03FFu)) << 22;
+    payload |= ((uint64_t)(candidate->y & 0x07FFu)) << 11;
+    payload |= ((uint64_t)(candidate->heading & 0x01FFu)) << 2;
 
-    uint8_t update_mask = 0x0F;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_FILTERED_STATUS,
+        (uint16_t)(candidate->timestamp_ms & CAN_TIMESTAMP_MASK),
+        payload
+    );
 }
 
 bool can_handler_send_no_candidate_vehicle(CanHandler* handler)
 {
-    uint8_t update_mask = 0x01;
     uint64_t payload = 0;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_FILTERED_STATUS,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }
 
 bool can_handler_send_candidate_vehicle_unavailable(CanHandler* handler)
 {
-    uint8_t update_mask = 0x01;
     uint64_t payload = 0;
-    payload |= ((uint64_t)TYPE_MASK_V2X_UNAVAILABLE) << 32;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_FILTERED_STATUS, update_mask, payload);
+    payload |= ((uint64_t)TYPE_MASK_V2X_UNAVAILABLE) << 40;
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_FILTERED_STATUS,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }
 
 bool can_handler_send_traffic_light(
@@ -367,8 +403,12 @@ bool can_handler_send_traffic_light(
     payload |= ((uint64_t)(cz_y & 0x07FFu)) << 5;
     payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
-    uint8_t update_mask = 0x3F;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_TRAFFIC_LIGHT,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }
 
 bool can_handler_send_no_traffic_light(CanHandler* handler, uint16_t cz_x, uint16_t cz_y, uint8_t maneuver)
@@ -378,8 +418,12 @@ bool can_handler_send_no_traffic_light(CanHandler* handler, uint16_t cz_x, uint1
     payload |= ((uint64_t)(cz_y & 0x07FFu)) << 5;
     payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
-    uint8_t update_mask = 0x21;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_TRAFFIC_LIGHT,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }
 
 bool can_handler_send_traffic_light_unavailable(CanHandler* handler, uint8_t maneuver)
@@ -388,6 +432,10 @@ bool can_handler_send_traffic_light_unavailable(CanHandler* handler, uint8_t man
     payload |= ((uint64_t)TL_TYPE_MASK_MQTT_UNAVAILABLE) << 32;
     payload |= ((uint64_t)(maneuver & 0x03u)) << 3;
 
-    uint8_t update_mask = 0x21;
-    return can_handler_send_raw_frame(handler, CAN_MSG_ID_TRAFFIC_LIGHT, update_mask, payload);
+    return can_handler_send_raw_frame(
+        handler,
+        CAN_MSG_ID_TRAFFIC_LIGHT,
+        can_handler_current_timestamp12(),
+        payload
+    );
 }

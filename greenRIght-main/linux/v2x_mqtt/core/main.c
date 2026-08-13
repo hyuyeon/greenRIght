@@ -13,7 +13,7 @@
 #define DEFAULT_MAP_PATH "map/intersection_lanelet_v1.xml"
 #define DEFAULT_MQTT_HOST "127.0.0.1"
 #define DEFAULT_MQTT_PORT 1883
-#define DEFAULT_VEHICLE_ID 1
+#define DEFAULT_VEHICLE_ID 2
 
 static AppContext g_app;
 
