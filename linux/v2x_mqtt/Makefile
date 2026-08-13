@@ -22,6 +22,7 @@ SRCS = \
     manager/other_vehicle_manager.c \
     manager/traffic_light_manager.c \
     common/ntp_time.c \
+    common/temporal_qos.c \
     common/vehicle_codec.c \
     map/IntersectionMap.c
 
