@@ -185,7 +185,13 @@ bool can_handler_send_candidate_vehicle_unavailable(CanHandler* handler) { retur
 bool can_handler_send_traffic_light(CanHandler* handler, uint8_t tl_id, const TrafficLight* tl, uint16_t x, uint16_t y, uint8_t maneuver)
 {
     uint8_t color = tl ? tl->color : 0, time_left = tl ? tl->time_left : 0;
-    uint64_t payload = ((uint64_t)tl_id << 40) | ((uint64_t)(color & 0x3u) << 38) | ((uint64_t)(time_left & 0xFu) << 34) | ((uint64_t)(x & 0x3FFu) << 24) | ((uint64_t)(y & 0x7FFu) << 13) | ((uint64_t)(maneuver & 0x3u) << 11);
+    uint64_t payload =
+        ((uint64_t)tl_id                    << 32) |
+        ((uint64_t)(color & 0x3u)           << 30) |
+        ((uint64_t)(time_left & 0xFu)       << 26) |
+        ((uint64_t)(x & 0x3FFu)             << 16) |
+        ((uint64_t)(y & 0x7FFu)             << 5)  |
+        ((uint64_t)(maneuver & 0x3u)        << 3);
     return send_frame(handler, MSG_TRAFFIC_LIGHT, tl ? tl->timestamp_ms : ntp_time_sync_epoch_ms(), payload);
 }
 

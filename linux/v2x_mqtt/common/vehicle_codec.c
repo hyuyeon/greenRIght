@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "ntp_time.h"
 #include "vehicle_codec.h"
 
 /* ============================ VehicleInfo ============================ */
@@ -119,9 +118,8 @@ bool vehicle_info_from_json(const cJSON *root, VehicleInfo *out)
 
     if (!get_string_field(root, "linked_tl_id", out->linked_tl_id, sizeof(out->linked_tl_id))) return false;
 
-    const cJSON *timestamp = cJSON_GetObjectItemCaseSensitive(root, "timestamp");
-    if (!cJSON_IsString(timestamp) || !timestamp->valuestring ||
-        !ntp_time_parse_iso8601_utc(timestamp->valuestring, &out->timestamp_ms)) return false;
+    if (!get_uint_field(root, "timestamp_ms", &val)) return false;
+    out->timestamp_ms = (uint64_t)val;
 
     return true;
 }
@@ -223,12 +221,7 @@ cJSON *traffic_light_to_json(const TrafficLight *tl)
     cJSON_AddStringToObject(root, "color", traffic_light_color_to_string(tl->color));
     cJSON_AddNumberToObject(root, "time_left", tl->time_left);
 
-    char timestamp[NTP_TIME_ISO8601_UTC_STRLEN + 1];
-    if (!ntp_time_format_iso8601_utc(tl->timestamp_ms, timestamp)) {
-        cJSON_Delete(root);
-        return NULL;
-    }
-    cJSON_AddStringToObject(root, "timestamp", timestamp);
+    cJSON_AddNumberToObject(root, "timestamp_ms", (double)tl->timestamp_ms);
 
     return root;
 }
