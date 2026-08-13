@@ -17,7 +17,7 @@
 #include <linux/can/raw.h>
 #endif
 
-#define CAN_TX_ARBITRATION_ID 0x321
+#define CAN_TX_ARBITRATION_ID 0x100
 #define MSG_EGO_STATUS 0x0u
 #define MSG_NTP_SYNC 0x2u
 #define MSG_CANDIDATE_INTRO 0x4u
