@@ -63,12 +63,10 @@ cJSON *vehicle_info_to_json(const VehicleInfo *v)
     cJSON_AddItemToObject(root, "conflict_zone_ids", cz_array);
     cJSON_AddNumberToObject(root, "conflict_zone_count", cz_count);
     cJSON_AddStringToObject(root, "linked_tl_id", v->linked_tl_id);
-    char timestamp[NTP_TIME_ISO8601_UTC_STRLEN + 1];
-    if (!ntp_time_format_iso8601_utc(v->timestamp_ms, timestamp)) {
-        cJSON_Delete(root);
-        return NULL;
-    }
-    cJSON_AddStringToObject(root, "timestamp", timestamp);
+    
+    cJSON_AddNumberToObject(root,
+                        "timestamp_ms",
+                        (double)tl->timestamp_ms);
 
     return root;
 }
@@ -256,9 +254,13 @@ bool traffic_light_from_json(const cJSON *root, TrafficLight *out)
     if (!get_uint_field(root, "time_left", &val)) return false;
     out->time_left = (uint8_t)val;
 
-    const cJSON *timestamp = cJSON_GetObjectItemCaseSensitive(root, "timestamp");
-    if (!cJSON_IsString(timestamp) || !timestamp->valuestring ||
-        !ntp_time_parse_iso8601_utc(timestamp->valuestring, &out->timestamp_ms)) return false;
+    const cJSON *timestamp_ms =
+    cJSON_GetObjectItemCaseSensitive(root, "timestamp_ms");
+
+if (!cJSON_IsNumber(timestamp_ms))
+    return false;
+
+out->timestamp_ms = (uint64_t)timestamp_ms->valuedouble;
 
     return true;
 }
