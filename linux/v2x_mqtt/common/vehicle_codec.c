@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "vehicle_codec.h"
+#include <time.h>
+#include <inttypes.h>
 
 /* ============================ VehicleInfo ============================ */
 
@@ -13,6 +15,32 @@ static void safe_copy(char* dst, size_t dst_size, const char* src)
         return;
     }
     snprintf(dst, dst_size, "%s", src);
+}
+
+static void format_utc_iso8601_ms(uint64_t timestamp_ms,
+                                    char* out,
+                                    size_t out_size)
+{
+    time_t sec = (time_t)(timestamp_ms / 1000ULL);
+    uint32_t ms = (uint32_t)(timestamp_ms % 1000ULL);
+
+    struct tm tm_utc;
+#if defined(_WIN32)
+    gmtime_s(&tm_utc, &sec);
+#else
+    gmtime_r(&sec, &tm_utc);
+#endif
+
+    snprintf(out,
+             out_size,
+             "%04d-%02d-%02dT%02d:%02d:%02d.%03uZ",
+             tm_utc.tm_year + 1900,
+             tm_utc.tm_mon + 1,
+             tm_utc.tm_mday,
+             tm_utc.tm_hour,
+             tm_utc.tm_min,
+             tm_utc.tm_sec,
+             ms);
 }
 
 static bool get_uint_field(const cJSON *root, const char *key, unsigned long long *out)
@@ -66,6 +94,10 @@ cJSON *vehicle_info_to_json(const VehicleInfo *v)
     cJSON_AddNumberToObject(root,
                         "timestamp_ms",
                         (double)v->timestamp_ms);
+    
+                        char utc_buf[32];
+    format_utc_iso8601_ms(v->timestamp_ms, utc_buf, sizeof(utc_buf));
+    cJSON_AddStringToObject(root, "timestamp", utc_buf);
 
     return root;
 }
@@ -222,6 +254,9 @@ cJSON *traffic_light_to_json(const TrafficLight *tl)
     cJSON_AddNumberToObject(root, "time_left", tl->time_left);
 
     cJSON_AddNumberToObject(root, "timestamp_ms", (double)tl->timestamp_ms);
+    char utc_buf[32];
+    format_utc_iso8601_ms(tl->timestamp_ms, utc_buf, sizeof(utc_buf));
+    cJSON_AddStringToObject(root, "timestamp", utc_buf);
 
     return root;
 }
