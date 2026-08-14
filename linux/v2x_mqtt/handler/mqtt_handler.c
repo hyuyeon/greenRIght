@@ -7,6 +7,36 @@
 #include "mqtt_topics.h"
 #include "temporal_qos.h"
 #include "vehicle_codec.h"
+#include "time_utils.h"
+
+
+bool mqtt_handler_publish_vehicle_info(MqttHandler* handler,
+                                       const VehicleInfo* vehicle)
+{
+    if (!handler || !handler->initialized || !handler->mosq || !vehicle)
+        return false;
+
+    VehicleInfo publish_vehicle = *vehicle;
+
+    // RTOS timestamp 무시하고 Linux NTP 시간 사용
+    publish_vehicle.timestamp_ms = get_utc_time_ms();
+
+    char* json = vehicle_info_to_json_string(&publish_vehicle);
+    if (!json) return false;
+
+    int rc = mosquitto_publish(
+        handler->mosq,
+        NULL,
+        handler->status_topic,
+        (int)strlen(json),
+        json,
+        0,
+        true
+    );
+
+    free(json);
+    return rc == MOSQ_ERR_SUCCESS;
+}
 
 static uint8_t parse_traffic_light_topic_id(const char* topic)
 {
