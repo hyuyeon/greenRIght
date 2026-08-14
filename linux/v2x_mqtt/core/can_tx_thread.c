@@ -6,8 +6,8 @@
 #include <string.h>
 #include <time.h>
 
-#define CAN_TX_TICK_MS 10
-#define CANDIDATE_STATUS_TX_PERIOD_MS 20
+#define CAN_TX_TICK_MS 5
+#define CANDIDATE_STATUS_TX_PERIOD_MS 15
 #define TRAFFIC_LIGHT_TX_PERIOD_MS 300
 #define NTP_SYNC_TX_PERIOD_MS 100
 #define CANDIDATE_ID_NONE VEHICLE_ID_NONE
