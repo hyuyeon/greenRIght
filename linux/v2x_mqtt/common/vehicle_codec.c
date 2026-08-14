@@ -95,7 +95,7 @@ cJSON *vehicle_info_to_json(const VehicleInfo *v)
                         "timestamp_ms",
                         (double)v->timestamp_ms);
     
-                        char utc_buf[32];
+    char utc_buf[32];
     format_utc_iso8601_ms(v->timestamp_ms, utc_buf, sizeof(utc_buf));
     cJSON_AddStringToObject(root, "timestamp", utc_buf);
 
