@@ -21,6 +21,7 @@ SRCS = \
     manager/self_vehicle_manager.c \
     manager/other_vehicle_manager.c \
     manager/traffic_light_manager.c \
+    manager/vehicle_publish_queue.c \
     common/ntp_time.c \
     common/temporal_qos.c \
     common/vehicle_codec.c \

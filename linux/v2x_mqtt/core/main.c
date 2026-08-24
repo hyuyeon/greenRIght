@@ -42,6 +42,8 @@ static bool app_init(AppContext* app, int argc, char** argv)
     if (!self_vehicle_manager_init(&app->self, vehicle_id)) return false;
     if (!other_vehicle_manager_init(&app->others)) return false;
     if (!traffic_light_manager_init(&app->traffic_lights)) return false;
+    if (!vehicle_publish_queue_init(&app->self_publish_queue)) return false;
+    app->self_publish_queue_initialized = true;
     snprintf(app->mqtt_host, sizeof(app->mqtt_host), "%s", mqtt_host);
     app->mqtt_port = mqtt_port;
     app->vehicle_id = vehicle_id;
@@ -54,6 +56,10 @@ static bool app_init(AppContext* app, int argc, char** argv)
 
 static void app_cleanup(AppContext* app)
 {
+    if (app->self_publish_queue_initialized) {
+        vehicle_publish_queue_destroy(&app->self_publish_queue);
+        app->self_publish_queue_initialized = false;
+    }
     traffic_light_manager_destroy(&app->traffic_lights);
     other_vehicle_manager_destroy(&app->others);
     self_vehicle_manager_destroy(&app->self);

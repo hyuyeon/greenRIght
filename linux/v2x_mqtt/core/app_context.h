@@ -28,6 +28,7 @@ typedef struct {
     OtherVehicleManager others;
     TrafficLightManager traffic_lights;
     VehiclePublishQueue self_publish_queue;
+    bool self_publish_queue_initialized;
 } AppContext;
 
 #endif
