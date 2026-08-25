@@ -69,6 +69,10 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
     if (self_vehicle_manager_get_info(&context->self, &self)) {
         if (atomic_load(&context->hardcoded_speed_enabled)) {
             self.speed = MQTT_HARDCODED_SPEED_CM_PER_SEC;
+        } else {
+            /* CAN ego speed is m/min; MQTT vehicle speed is cm/s. */
+            self.speed = (uint8_t)(
+                ((uint16_t)self.speed * 100U + 30U) / 60U);
         }
         vehicle_publish_queue_push(&context->self_publish_queue, &self);
     }
