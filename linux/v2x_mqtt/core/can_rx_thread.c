@@ -67,7 +67,10 @@ static void on_ego_frame(const EgoVehicle* ego, void* user_data)
 
     VehicleInfo self;
     if (self_vehicle_manager_get_info(&context->self, &self)) {
-    vehicle_publish_queue_push(&context->self_publish_queue, &self);
+        if (atomic_load(&context->hardcoded_speed_enabled)) {
+            self.speed = MQTT_HARDCODED_SPEED_CM_PER_SEC;
+        }
+        vehicle_publish_queue_push(&context->self_publish_queue, &self);
     }
 
     bool was_candidate_mode =

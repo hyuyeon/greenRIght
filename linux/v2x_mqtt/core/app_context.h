@@ -12,9 +12,12 @@
 #include "traffic_light_manager.h"
 #include "vehicle_publish_queue.h"
 
+#define MQTT_HARDCODED_SPEED_CM_PER_SEC 87u
+
 typedef struct {
     atomic_bool running;
     atomic_bool candidate_vehicle_tx_enabled;
+    atomic_bool hardcoded_speed_enabled;
     char mqtt_host[128];
     int mqtt_port;
     uint8_t vehicle_id;
